@@ -19,23 +19,24 @@ export function BackgroundFX({ phase, multiplier }: Props) {
       className="absolute inset-0 overflow-hidden pointer-events-none"
       aria-hidden
     >
-      {/* Branded background image */}
+      {/* Branded background image — contained so the full art is visible */}
       <div
         className="absolute inset-0"
         style={{
           backgroundImage: "url(/bg.jpg)",
-          backgroundSize: "cover",
+          backgroundSize: "contain",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
-          opacity: 0.55,
+          opacity: 0.75,
         }}
       />
-      {/* Darkening veil so UI stays readable on all screen sizes */}
+      {/* Softer veil — bg now letterboxes onto the base bg colour, so we only
+          need a light wash for UI contrast */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            "linear-gradient(to bottom, rgba(10,10,10,0.5) 0%, rgba(10,10,10,0.35) 40%, rgba(10,10,10,0.7) 100%)",
+            "linear-gradient(to bottom, rgba(10,10,10,0.25) 0%, rgba(10,10,10,0.1) 40%, rgba(10,10,10,0.55) 100%)",
         }}
       />
       {/* Graph-paper grid on top of the bg */}
