@@ -19,11 +19,23 @@ export function BackgroundFX({ phase, multiplier }: Props) {
       className="absolute inset-0 overflow-hidden pointer-events-none"
       aria-hidden
     >
-      {/* Branded background image — contained so the full art is visible */}
+      {/* Branded background — portrait mob.jpg on mobile, landscape bg.jpg on
+          md+ screens. Both contained so the full art reads; --color-bg
+          matches the image edge colour so the letterbox blends. */}
       <div
-        className="absolute inset-0"
+        className="hidden md:block absolute inset-0"
         style={{
           backgroundImage: "url(/bg.jpg)",
+          backgroundSize: "contain",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          opacity: 0.75,
+        }}
+      />
+      <div
+        className="md:hidden absolute inset-0"
+        style={{
+          backgroundImage: "url(/mob.jpg)",
           backgroundSize: "contain",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
