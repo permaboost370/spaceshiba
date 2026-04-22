@@ -1,39 +1,40 @@
 @import "tailwindcss";
 
+/* Digital brutalism, light mode:
+   - cream/white base, ink-black text
+   - single hot-orange accent for flame/action
+   - red for danger (crash)
+   - sharp corners, thick ink borders, hard offset shadows
+   - monospace type throughout */
 @theme {
-  --color-bg: #07060a;
-  --color-paper: #f5ecd9;
-  --color-ink: #141210;
-  --color-flame: #ff7a1a;
-  --color-flame-bright: #ffc04a;
-  --color-danger: #ff5a5a;
+  --color-bg: #f4ecd8;
+  --color-surface: #ffffff;
+  --color-ink: #0a0a0a;
+  --color-paper: #0a0a0a; /* legacy alias used by some components → now points at ink */
+  --color-flame: #ff4a00;
+  --color-flame-bright: #ffb400;
+  --color-danger: #e21414;
+  --color-muted: #7a7163;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
 body {
   background: var(--color-bg);
-  color: var(--color-paper);
+  color: var(--color-ink);
   min-height: 100vh;
   margin: 0;
   overflow: hidden;
+  font-family: var(--font-hand, ui-monospace, "Courier New", monospace);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Stop number inputs from showing spinners so our sketchy input looks clean */
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield;
-}
-
-/* Hide scrollbar on history strip while still allowing scroll on overflow */
+/* Hide scrollbars on horizontal lists */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -41,8 +42,7 @@ input[type="number"] {
   scrollbar-width: none;
 }
 
-/* Tailwind v4 preflight drops the UA pointer cursor on buttons — put it back
-   so every click target shows the hand. */
+/* Brutalist cursor policy */
 button,
 [role="button"],
 label,
@@ -59,4 +59,47 @@ button:disabled,
 [type="button"]:disabled,
 [type="submit"]:disabled {
   cursor: not-allowed;
+}
+
+/* Graph-paper grid that sits behind the whole stage */
+.graph-paper {
+  background-image:
+    linear-gradient(to right, rgba(10, 10, 10, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(10, 10, 10, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Brutalist surface: white card, thick ink border, hard offset shadow */
+.brut {
+  background: var(--color-surface);
+  border: 2px solid var(--color-ink);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  border-radius: 0;
+}
+
+.brut-flat {
+  background: var(--color-surface);
+  border: 2px solid var(--color-ink);
+  border-radius: 0;
+}
+
+/* Common button style so BetPanel can compose them */
+.brut-btn {
+  background: var(--color-ink);
+  color: var(--color-bg);
+  border: 2px solid var(--color-ink);
+  box-shadow: 4px 4px 0 var(--color-ink);
+  border-radius: 0;
+  padding: 0.75rem 1rem;
+  transition: transform 0.06s linear, box-shadow 0.06s linear;
+}
+.brut-btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--color-ink);
+}
+
+.brut-btn-primary {
+  background: var(--color-flame);
+  color: var(--color-ink);
+  border-color: var(--color-ink);
 }

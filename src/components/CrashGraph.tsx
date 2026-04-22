@@ -2,7 +2,7 @@
 import { motion } from "framer-motion";
 import { useMemo } from "react";
 import { multiplierAt } from "@/lib/crash";
-import type { Phase } from "@/lib/useGame";
+import type { Phase } from "@/lib/useMultiplayerGame";
 import { Flame } from "./Flame";
 
 const VB_W = 1000;
@@ -75,19 +75,11 @@ export function CrashGraph({
   const tipLeftPct = (tipX / VB_W) * 100;
   const tipTopPct = (tipY / VB_H) * 100;
 
-  // Tangent angle at current tip, in viewBox space.
-  // dm/dms = ln(growth)/1000 * multiplier
-  // slope_vb = dy/dx = (dy/dms)/(dx/dms)
-  //         = -(GRAPH_H/(yMax-1) * dm/dms) / (GRAPH_W / xMaxMs)
   const dmPerMs = (LN_GROWTH / 1000) * multiplier;
   const dxPerMs = GRAPH_W / xMaxMs;
   const dyPerMs = -(GRAPH_H / (yMax - 1)) * dmPerMs;
-  const slopeVB = dyPerMs / dxPerMs; // negative
-  // angle above horizontal (positive), in degrees
+  const slopeVB = dyPerMs / dxPerMs;
   const tangentAbove = (Math.atan(-slopeVB) * 180) / Math.PI;
-  // Rotate shiba so its body leans along the tangent direction. Full
-  // alignment would be (90 - tangentAbove); we scale down so the tilt is
-  // subtle and cap it.
   const tiltDeg = Math.max(0, Math.min(38, (90 - tangentAbove) * 0.38));
 
   const flameIntensity =
@@ -114,12 +106,12 @@ export function CrashGraph({
       >
         <defs>
           <linearGradient id="trailGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#ff7a1a" stopOpacity="0" />
-            <stop offset="45%" stopColor="#ff7a1a" stopOpacity="0.7" />
-            <stop offset="100%" stopColor="#ffd670" stopOpacity="1" />
+            <stop offset="0%" stopColor="#ff4a00" stopOpacity="0" />
+            <stop offset="45%" stopColor="#ff4a00" stopOpacity="0.75" />
+            <stop offset="100%" stopColor="#ffb400" stopOpacity="1" />
           </linearGradient>
           <filter id="trailGlow" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="6" />
+            <feGaussianBlur stdDeviation="5" />
           </filter>
         </defs>
 
@@ -132,7 +124,7 @@ export function CrashGraph({
               y1={y}
               x2={PAD_L + GRAPH_W}
               y2={y}
-              stroke="rgba(245,236,217,0.06)"
+              stroke="rgba(10,10,10,0.09)"
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
             />
@@ -147,21 +139,21 @@ export function CrashGraph({
               y1={PAD_T}
               x2={x}
               y2={PAD_T + GRAPH_H}
-              stroke="rgba(245,236,217,0.06)"
+              stroke="rgba(10,10,10,0.09)"
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
             />
           );
         })}
 
+        {/* axes: thick ink lines */}
         <line
           x1={PAD_L}
           y1={PAD_T}
           x2={PAD_L}
           y2={PAD_T + GRAPH_H}
-          stroke="rgba(245,236,217,0.28)"
-          strokeWidth={1.5}
-          strokeDasharray="3 5"
+          stroke="rgba(10,10,10,0.9)"
+          strokeWidth={2}
           vectorEffect="non-scaling-stroke"
         />
         <line
@@ -169,9 +161,8 @@ export function CrashGraph({
           y1={PAD_T + GRAPH_H}
           x2={PAD_L + GRAPH_W}
           y2={PAD_T + GRAPH_H}
-          stroke="rgba(245,236,217,0.28)"
-          strokeWidth={1.5}
-          strokeDasharray="3 5"
+          stroke="rgba(10,10,10,0.9)"
+          strokeWidth={2}
           vectorEffect="non-scaling-stroke"
         />
 
@@ -181,10 +172,10 @@ export function CrashGraph({
               d={pathD}
               fill="none"
               stroke="#ff4a00"
-              strokeWidth={20}
+              strokeWidth={18}
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity={0.5}
+              opacity={0.35}
               filter="url(#trailGlow)"
               vectorEffect="non-scaling-stroke"
             />
@@ -192,7 +183,7 @@ export function CrashGraph({
               d={pathD}
               fill="none"
               stroke="url(#trailGrad)"
-              strokeWidth={9}
+              strokeWidth={8}
               strokeLinecap="round"
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
@@ -200,11 +191,11 @@ export function CrashGraph({
             <path
               d={pathD}
               fill="none"
-              stroke="#fff4d0"
-              strokeWidth={2.2}
+              stroke="#0a0a0a"
+              strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity={0.9}
+              opacity={0.7}
               vectorEffect="non-scaling-stroke"
             />
           </>
@@ -214,7 +205,7 @@ export function CrashGraph({
       {yTicks.map((v) => (
         <div
           key={`yl-${v}`}
-          className="absolute text-paper/55 text-xs sm:text-sm md:text-base pointer-events-none"
+          className="absolute text-ink/70 text-xs sm:text-sm md:text-base pointer-events-none tabular-nums"
           style={{
             fontFamily: "var(--font-hand)",
             left: 0,
@@ -231,7 +222,7 @@ export function CrashGraph({
       {xTicks.map((v) => (
         <div
           key={`xl-${v}`}
-          className="absolute text-paper/55 text-xs sm:text-sm md:text-base pointer-events-none"
+          className="absolute text-ink/70 text-xs sm:text-sm md:text-base pointer-events-none tabular-nums"
           style={{
             fontFamily: "var(--font-hand)",
             left: `${xToPct(v)}%`,
@@ -280,14 +271,14 @@ function StatusText({
     return (
       <div className="text-center">
         <div
-          className="text-paper/70 text-xl sm:text-2xl md:text-3xl"
-          style={{ fontFamily: "var(--font-hand)" }}
+          className="text-ink/70 text-xs sm:text-sm md:text-base uppercase tracking-[0.2em]"
+          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
         >
           next launch in
         </div>
         <div
-          className="text-paper text-5xl sm:text-7xl md:text-8xl leading-none"
-          style={{ fontFamily: "var(--font-display)" }}
+          className="text-ink text-5xl sm:text-7xl md:text-8xl leading-none tabular-nums"
+          style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
         >
           {Math.ceil(bettingMsLeft / 1000)}
         </div>
@@ -297,30 +288,40 @@ function StatusText({
   if (phase === "crashed") {
     return (
       <motion.div
-        initial={{ scale: 1, rotate: 0 }}
-        animate={{ scale: [1, 1.22, 1], rotate: [0, -3, 3, -1, 0] }}
-        transition={{ duration: 0.7 }}
+        initial={{ opacity: 0.7 }}
+        animate={{ opacity: [0.7, 1] }}
+        transition={{ duration: 0.3 }}
         className="text-center"
       >
         <div
-          className="text-danger text-5xl sm:text-7xl md:text-9xl leading-none drop-shadow-[0_0_40px_rgba(255,90,90,0.7)]"
-          style={{ fontFamily: "var(--font-display)" }}
+          className="text-danger text-5xl sm:text-7xl md:text-9xl leading-none tabular-nums"
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 700,
+            textShadow:
+              "0 0 14px rgba(226,20,20,0.4), 0 0 28px rgba(226,20,20,0.2)",
+          }}
         >
           {crashPoint?.toFixed(2)}x
         </div>
         <div
-          className="text-paper text-xl sm:text-2xl md:text-4xl -mt-1"
-          style={{ fontFamily: "var(--font-hand)" }}
+          className="text-ink text-xl sm:text-2xl md:text-4xl -mt-1 uppercase tracking-widest"
+          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
         >
-          crashed!
+          // crashed
         </div>
       </motion.div>
     );
   }
   return (
     <div
-      className="text-paper text-6xl sm:text-8xl md:text-9xl leading-none drop-shadow-[0_0_30px_rgba(255,122,26,0.55)] tabular-nums"
-      style={{ fontFamily: "var(--font-display)" }}
+      className="text-ink text-6xl sm:text-8xl md:text-9xl leading-none tabular-nums"
+      style={{
+        fontFamily: "var(--font-display)",
+        fontWeight: 700,
+        textShadow:
+          "0 0 12px rgba(255,74,0,0.35), 0 0 26px rgba(255,74,0,0.18)",
+      }}
     >
       {multiplier.toFixed(2)}x
     </div>
@@ -408,4 +409,3 @@ function ShibaPilot({
     </div>
   );
 }
-

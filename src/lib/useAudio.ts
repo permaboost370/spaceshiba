@@ -1,22 +1,46 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Fun space-y synthesis. All sounds are generated on the fly with Web Audio.
-//  - launch: noise whoosh sweeping up + sub-bass thump
-//  - engine: two detuned saws + sub sine octave + vibrato LFO + resonant lowpass
-//            that opens as multiplier climbs
-//  - cashOutDing: bright C–E–G–C major arpeggio w/ triangle + sine octave sparkle
-//  - crashBoom: descending sawtooth blast + exploding filtered noise + sub thump
-//  - tick: two-voice chirp; last-second tick is higher pitch for urgency
+// Real rocket engine: brown-noise rumble + sub-bass + high-freq hiss, filtered.
+// No oscillator tones, no vibrato — just layered noise like an actual engine.
+//  - launch: pitched noise whoosh + 90→40 Hz thump
+//  - engine: looping brown-noise through lowpass (opens with multiplier)
+//            + continuous sub-bass sine + subtle white-noise hiss
+//  - cashOutDing: C–E–G–C major arpeggio on triangle waves
+//  - crashBoom: descending saw + filtered explosion noise + sub thump
+//  - tick: short pitched chirp; last-second tick is higher/louder
 type Engine = {
-  osc1: OscillatorNode;
-  osc2: OscillatorNode;
-  subOsc: OscillatorNode;
-  vibratoOsc: OscillatorNode;
-  vibratoGain: GainNode;
-  filter: BiquadFilterNode;
-  gain: GainNode;
+  rumble: AudioBufferSourceNode;
+  rumbleFilter: BiquadFilterNode;
+  rumbleGain: GainNode;
+  hiss: AudioBufferSourceNode;
+  hissFilter: BiquadFilterNode;
+  hissGain: GainNode;
+  sub: OscillatorNode;
+  subGain: GainNode;
+  master: GainNode;
 };
+
+function buildBrownNoise(ctx: AudioContext, seconds: number) {
+  const size = Math.floor(seconds * ctx.sampleRate);
+  const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < size; i++) {
+    const w = Math.random() * 2 - 1;
+    last = (last + 0.02 * w) / 1.02;
+    data[i] = last * 3.5;
+  }
+  return buf;
+}
+
+function buildWhiteNoise(ctx: AudioContext, seconds: number) {
+  const size = Math.floor(seconds * ctx.sampleRate);
+  const buf = ctx.createBuffer(1, size, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < size; i++) data[i] = Math.random() * 2 - 1;
+  return buf;
+}
 
 export function useAudio() {
   const ctxRef = useRef<AudioContext | null>(null);
@@ -50,36 +74,36 @@ export function useAudio() {
     }
   }, []);
 
+  // Apply master mute without stopping the engine
+  useEffect(() => {
+    const m = masterRef.current;
+    if (!m || !ctxRef.current) return;
+    m.gain.setTargetAtTime(muted ? 0 : 1, ctxRef.current.currentTime, 0.05);
+  }, [muted]);
+
   const launch = useCallback(() => {
     const ctx = ensureCtx();
-    if (!ctx || !masterRef.current || mutedRef.current) return;
+    if (!ctx || !masterRef.current) return;
     const master = masterRef.current;
     const now = ctx.currentTime;
 
-    const dur = 0.65;
-    const bufSize = Math.floor(dur * ctx.sampleRate);
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) {
-      // ramp up envelope so the whoosh accelerates
-      const env = Math.min(1, i / (bufSize * 0.5));
-      data[i] = (Math.random() * 2 - 1) * env;
-    }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buf;
+    const dur = 0.7;
+    const buf = buildWhiteNoise(ctx, dur);
+    const n = ctx.createBufferSource();
+    n.buffer = buf;
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
     bp.Q.value = 3;
     bp.frequency.setValueAtTime(180, now);
-    bp.frequency.exponentialRampToValueAtTime(5200, now + 0.55);
+    bp.frequency.exponentialRampToValueAtTime(5000, now + 0.6);
     const ng = ctx.createGain();
     ng.gain.setValueAtTime(0.0001, now);
-    ng.gain.exponentialRampToValueAtTime(0.35, now + 0.2);
+    ng.gain.exponentialRampToValueAtTime(0.4, now + 0.2);
     ng.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    noise.connect(bp);
+    n.connect(bp);
     bp.connect(ng);
     ng.connect(master);
-    noise.start();
+    n.start();
 
     const thump = ctx.createOscillator();
     thump.type = "sine";
@@ -101,174 +125,175 @@ export function useAudio() {
     const master = masterRef.current;
     const now = ctx.currentTime;
 
-    const osc1 = ctx.createOscillator();
-    osc1.type = "sawtooth";
-    osc1.frequency.value = 120;
-    const osc2 = ctx.createOscillator();
-    osc2.type = "sawtooth";
-    osc2.frequency.value = 121.4;
-    const subOsc = ctx.createOscillator();
-    subOsc.type = "sine";
-    subOsc.frequency.value = 60;
+    const rumble = ctx.createBufferSource();
+    rumble.buffer = buildBrownNoise(ctx, 4);
+    rumble.loop = true;
+    const rumbleFilter = ctx.createBiquadFilter();
+    rumbleFilter.type = "lowpass";
+    rumbleFilter.frequency.value = 260;
+    rumbleFilter.Q.value = 0.9;
+    const rumbleGain = ctx.createGain();
+    rumbleGain.gain.value = 1.6;
 
-    const vibratoOsc = ctx.createOscillator();
-    vibratoOsc.type = "sine";
-    vibratoOsc.frequency.value = 5.2;
-    const vibratoGain = ctx.createGain();
-    vibratoGain.gain.value = 2.5;
-    vibratoOsc.connect(vibratoGain);
-    vibratoGain.connect(osc1.frequency);
-    vibratoGain.connect(osc2.frequency);
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = buildWhiteNoise(ctx, 4);
+    hiss.loop = true;
+    const hissFilter = ctx.createBiquadFilter();
+    hissFilter.type = "bandpass";
+    hissFilter.frequency.value = 1800;
+    hissFilter.Q.value = 1.2;
+    const hissGain = ctx.createGain();
+    hissGain.gain.value = 0.05;
 
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 750;
-    filter.Q.value = 4;
+    const sub = ctx.createOscillator();
+    sub.type = "sine";
+    sub.frequency.value = 46;
+    const subGain = ctx.createGain();
+    subGain.gain.value = 0.35;
 
-    const gain = ctx.createGain();
-    gain.gain.value = 0;
+    const engineMaster = ctx.createGain();
+    engineMaster.gain.value = 0;
 
-    osc1.connect(filter);
-    osc2.connect(filter);
-    filter.connect(gain);
-    subOsc.connect(gain);
-    gain.connect(master);
+    rumble.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleGain);
+    rumbleGain.connect(engineMaster);
+    hiss.connect(hissFilter);
+    hissFilter.connect(hissGain);
+    hissGain.connect(engineMaster);
+    sub.connect(subGain);
+    subGain.connect(engineMaster);
+    engineMaster.connect(master);
 
-    osc1.start();
-    osc2.start();
-    subOsc.start();
-    vibratoOsc.start();
+    rumble.start();
+    hiss.start();
+    sub.start();
 
-    gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(mutedRef.current ? 0 : 0.07, now + 0.18);
+    engineMaster.gain.setValueAtTime(0, now);
+    engineMaster.gain.linearRampToValueAtTime(0.28, now + 0.35);
 
     engineRef.current = {
-      osc1,
-      osc2,
-      subOsc,
-      vibratoOsc,
-      vibratoGain,
-      filter,
-      gain,
+      rumble,
+      rumbleFilter,
+      rumbleGain,
+      hiss,
+      hissFilter,
+      hissGain,
+      sub,
+      subGain,
+      master: engineMaster,
     };
   }, [ensureCtx]);
 
   const updateEngine = useCallback((multiplier: number) => {
     const ctx = ctxRef.current;
-    const engine = engineRef.current;
-    if (!ctx || !engine) return;
+    const e = engineRef.current;
+    if (!ctx || !e) return;
     const now = ctx.currentTime;
 
-    const baseFreq = 120 + Math.min(680, (multiplier - 1) * 80);
-    engine.osc1.frequency.setTargetAtTime(baseFreq, now, 0.04);
-    engine.osc2.frequency.setTargetAtTime(baseFreq * 1.013, now, 0.04);
-    engine.subOsc.frequency.setTargetAtTime(baseFreq / 2, now, 0.05);
+    // Rumble filter opens as the rocket pushes harder
+    const cutoff = 260 + Math.min(480, (multiplier - 1) * 55);
+    e.rumbleFilter.frequency.setTargetAtTime(cutoff, now, 0.12);
 
-    const vol = mutedRef.current
-      ? 0
-      : Math.min(0.16, 0.06 + (multiplier - 1) * 0.012);
-    engine.gain.gain.setTargetAtTime(vol, now, 0.05);
+    // High-freq hiss rises slightly — feels like air rushing past
+    const hissFreq = 1800 + Math.min(1400, (multiplier - 1) * 200);
+    e.hissFilter.frequency.setTargetAtTime(hissFreq, now, 0.15);
+    const hissVol = Math.min(0.14, 0.05 + (multiplier - 1) * 0.01);
+    e.hissGain.gain.setTargetAtTime(hissVol, now, 0.1);
 
-    const cutoff = 700 + Math.min(3600, (multiplier - 1) * 380);
-    engine.filter.frequency.setTargetAtTime(cutoff, now, 0.08);
-
-    // as it climbs, vibrato intensifies slightly for a frantic feel
-    const vibDepth = 2 + Math.min(8, (multiplier - 1) * 0.6);
-    engine.vibratoGain.gain.setTargetAtTime(vibDepth, now, 0.08);
+    // Overall engine volume climbs modestly
+    const vol = Math.min(0.42, 0.28 + (multiplier - 1) * 0.014);
+    e.master.gain.setTargetAtTime(vol, now, 0.12);
   }, []);
 
   const stopEngine = useCallback(() => {
     const ctx = ctxRef.current;
-    const engine = engineRef.current;
-    if (!ctx || !engine) return;
+    const e = engineRef.current;
+    if (!ctx || !e) return;
     const now = ctx.currentTime;
     engineRef.current = null;
-    engine.gain.gain.cancelScheduledValues(now);
-    engine.gain.gain.setTargetAtTime(0, now, 0.03);
+    e.master.gain.cancelScheduledValues(now);
+    e.master.gain.setTargetAtTime(0, now, 0.04);
     setTimeout(() => {
       try {
-        engine.osc1.stop();
-        engine.osc1.disconnect();
-        engine.osc2.stop();
-        engine.osc2.disconnect();
-        engine.subOsc.stop();
-        engine.subOsc.disconnect();
-        engine.vibratoOsc.stop();
-        engine.vibratoOsc.disconnect();
-        engine.vibratoGain.disconnect();
-        engine.filter.disconnect();
-        engine.gain.disconnect();
-      } catch {}
-    }, 250);
+        e.rumble.stop();
+        e.rumble.disconnect();
+        e.hiss.stop();
+        e.hiss.disconnect();
+        e.sub.stop();
+        e.sub.disconnect();
+        e.rumbleFilter.disconnect();
+        e.rumbleGain.disconnect();
+        e.hissFilter.disconnect();
+        e.hissGain.disconnect();
+        e.subGain.disconnect();
+        e.master.disconnect();
+      } catch {
+        /* ignore */
+      }
+    }, 300);
   }, []);
 
   const crashBoom = useCallback(() => {
     const ctx = ensureCtx();
-    if (!ctx || !masterRef.current || mutedRef.current) return;
+    if (!ctx || !masterRef.current) return;
     const master = masterRef.current;
     const now = ctx.currentTime;
 
-    // Descending pitch blast (the whistle-before-impact)
     const blast = ctx.createOscillator();
     blast.type = "sawtooth";
     blast.frequency.setValueAtTime(620, now);
     blast.frequency.exponentialRampToValueAtTime(55, now + 0.45);
-    const blastFilter = ctx.createBiquadFilter();
-    blastFilter.type = "lowpass";
-    blastFilter.frequency.setValueAtTime(2400, now);
-    blastFilter.frequency.exponentialRampToValueAtTime(220, now + 0.5);
-    blastFilter.Q.value = 2;
-    const blastGain = ctx.createGain();
-    blastGain.gain.setValueAtTime(0.4, now);
-    blastGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-    blast.connect(blastFilter);
-    blastFilter.connect(blastGain);
-    blastGain.connect(master);
+    const bf = ctx.createBiquadFilter();
+    bf.type = "lowpass";
+    bf.frequency.setValueAtTime(2400, now);
+    bf.frequency.exponentialRampToValueAtTime(220, now + 0.5);
+    bf.Q.value = 2;
+    const bg = ctx.createGain();
+    bg.gain.setValueAtTime(0.4, now);
+    bg.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    blast.connect(bf);
+    bf.connect(bg);
+    bg.connect(master);
     blast.start();
     blast.stop(now + 0.6);
 
-    // Explosion noise with darkening filter
-    const dur = 0.85;
-    const bufSize = Math.floor(dur * ctx.sampleRate);
-    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const dur = 0.9;
+    const buf = buildWhiteNoise(ctx, dur);
     const data = buf.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) {
-      const env = Math.pow(1 - i / bufSize, 2);
-      data[i] = (Math.random() * 2 - 1) * env;
+    for (let i = 0; i < data.length; i++) {
+      data[i] *= Math.pow(1 - i / data.length, 2);
     }
-    const noise = ctx.createBufferSource();
-    noise.buffer = buf;
-    const noiseFilter = ctx.createBiquadFilter();
-    noiseFilter.type = "lowpass";
-    noiseFilter.frequency.setValueAtTime(4500, now);
-    noiseFilter.frequency.exponentialRampToValueAtTime(380, now + 0.6);
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.value = 0.55;
-    noise.connect(noiseFilter);
-    noiseFilter.connect(noiseGain);
-    noiseGain.connect(master);
-    noise.start();
+    const n = ctx.createBufferSource();
+    n.buffer = buf;
+    const nf = ctx.createBiquadFilter();
+    nf.type = "lowpass";
+    nf.frequency.setValueAtTime(4500, now);
+    nf.frequency.exponentialRampToValueAtTime(360, now + 0.6);
+    const ng = ctx.createGain();
+    ng.gain.value = 0.55;
+    n.connect(nf);
+    nf.connect(ng);
+    ng.connect(master);
+    n.start();
 
-    // Sub-bass thump for gut-punch
     const thump = ctx.createOscillator();
     thump.type = "sine";
     thump.frequency.setValueAtTime(130, now);
     thump.frequency.exponentialRampToValueAtTime(28, now + 0.45);
-    const thumpGain = ctx.createGain();
-    thumpGain.gain.setValueAtTime(0.75, now);
-    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
-    thump.connect(thumpGain);
-    thumpGain.connect(master);
+    const tg = ctx.createGain();
+    tg.gain.setValueAtTime(0.75, now);
+    tg.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    thump.connect(tg);
+    tg.connect(master);
     thump.start();
     thump.stop(now + 0.6);
   }, [ensureCtx]);
 
   const cashOutDing = useCallback(() => {
     const ctx = ensureCtx();
-    if (!ctx || !masterRef.current || mutedRef.current) return;
+    if (!ctx || !masterRef.current) return;
     const master = masterRef.current;
     const now = ctx.currentTime;
-    // C major arpeggio, 4 quick notes — coin-collect flavor
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, i) => {
       const start = now + i * 0.07;
@@ -297,10 +322,9 @@ export function useAudio() {
     });
   }, [ensureCtx]);
 
-  // urgency 1 (3s) → 2 (2s) → 3 (1s): higher pitch, slightly louder for the final beep.
   const tick = useCallback((urgency: number = 1) => {
     const ctx = ensureCtx();
-    if (!ctx || !masterRef.current || mutedRef.current) return;
+    if (!ctx || !masterRef.current) return;
     const master = masterRef.current;
     const now = ctx.currentTime;
     const freq = 620 + urgency * 220;
@@ -310,9 +334,9 @@ export function useAudio() {
     const oscHi = ctx.createOscillator();
     oscHi.type = "sine";
     oscHi.frequency.value = freq * 1.5;
-    const g = ctx.createGain();
     const peakGain = urgency >= 3 ? 0.13 : 0.07;
     const dur = urgency >= 3 ? 0.16 : 0.09;
+    const g = ctx.createGain();
     g.gain.setValueAtTime(0, now);
     g.gain.linearRampToValueAtTime(peakGain, now + 0.008);
     g.gain.exponentialRampToValueAtTime(0.001, now + dur);

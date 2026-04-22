@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
-import { Orbitron, VT323 } from "next/font/google";
+import { Space_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 
-const display = Orbitron({
-  weight: ["700", "900"],
+// Digital brutalism: Space Grotesk for display headings (chunky geometric
+// sans), Space Mono for everything else (monospace, terminal-y).
+const display = Space_Grotesk({
+  weight: ["500", "700"],
   subsets: ["latin"],
   variable: "--font-display",
 });
 
-const hand = VT323({
-  weight: "400",
+const hand = Space_Mono({
+  weight: ["400", "700"],
   subsets: ["latin"],
   variable: "--font-hand",
 });

@@ -1,6 +1,6 @@
 "use client";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Phase } from "@/lib/useGame";
+import type { Phase } from "@/lib/useMultiplayerGame";
 
 type Props = {
   phase: Phase;
@@ -14,6 +14,7 @@ type Props = {
   placeBet: () => void;
   cashOut: () => void;
   cancelBet: () => void;
+  connected: boolean;
 };
 
 export function BetPanel(p: Props) {
@@ -29,11 +30,11 @@ export function BetPanel(p: Props) {
   return (
     <div className="w-full max-w-md mx-auto space-y-2.5 sm:space-y-3">
       <div
-        className="flex justify-between items-baseline text-xl sm:text-2xl md:text-3xl"
-        style={{ fontFamily: "var(--font-hand)" }}
+        className="flex justify-between items-baseline text-lg sm:text-xl md:text-2xl uppercase tracking-widest"
+        style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       >
-        <span className="text-paper/70">balance</span>
-        <span className="text-paper tabular-nums">§ {p.balance.toFixed(2)}</span>
+        <span className="text-ink/60">balance</span>
+        <span className="text-ink tabular-nums">§ {p.balance.toFixed(2)}</span>
       </div>
 
       <div className="flex gap-1.5 sm:gap-2 items-stretch">
@@ -45,8 +46,8 @@ export function BetPanel(p: Props) {
             p.setBetInput(Math.max(0, Math.floor(Number(e.target.value) || 0)))
           }
           disabled={p.activeBet !== null}
-          className="flex-1 min-w-0 bg-paper/10 border-2 border-paper/40 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 text-xl sm:text-2xl text-paper placeholder-paper/40 focus:outline-none focus:border-paper disabled:opacity-50 tabular-nums"
-          style={{ fontFamily: "var(--font-hand)" }}
+          className="flex-1 min-w-0 bg-surface border-2 border-ink px-3 sm:px-4 py-2.5 sm:py-3 text-xl sm:text-2xl text-ink placeholder-ink/40 focus:outline-none disabled:opacity-50 tabular-nums"
+          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
           placeholder="bet"
           min={0}
         />
@@ -55,8 +56,8 @@ export function BetPanel(p: Props) {
             key={v}
             onClick={() => p.setBetInput(v)}
             disabled={p.activeBet !== null}
-            className="px-2.5 sm:px-3 border-2 border-paper/40 rounded-xl text-lg sm:text-xl text-paper hover:bg-paper/10 disabled:opacity-40 transition"
-            style={{ fontFamily: "var(--font-hand)" }}
+            className="px-2.5 sm:px-3 bg-surface border-2 border-ink text-lg sm:text-xl text-ink hover:bg-ink hover:text-bg disabled:opacity-40 transition-colors tabular-nums"
+            style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
           >
             {v}
           </button>
@@ -65,32 +66,45 @@ export function BetPanel(p: Props) {
 
       <div className="relative h-16 sm:h-20">
         <AnimatePresence mode="wait">
-          {canCashOut ? (
+          {!p.connected ? (
+            <motion.div
+              key="disconnected"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/70 text-xl sm:text-2xl uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+            >
+              connecting…
+            </motion.div>
+          ) : canCashOut ? (
             <motion.button
               key="cashout"
-              initial={{ y: 20, opacity: 0 }}
+              initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -20, opacity: 0 }}
+              exit={{ y: -10, opacity: 0 }}
+              transition={{ duration: 0.12 }}
               onClick={p.cashOut}
-              className="absolute inset-0 bg-flame text-ink rounded-2xl text-2xl sm:text-3xl md:text-4xl shadow-[4px_4px_0_rgba(245,236,217,0.9)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_rgba(245,236,217,0.9)] transition-all"
-              style={{ fontFamily: "var(--font-display)" }}
+              className="absolute inset-0 bg-flame text-ink border-2 border-ink shadow-[4px_4px_0_#0a0a0a] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#0a0a0a] transition-all text-2xl sm:text-3xl md:text-4xl uppercase tracking-wider tabular-nums"
+              style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
             >
               cash out § {potentialWin.toFixed(2)}
             </motion.button>
           ) : p.cashedOutAt !== null ? (
             <motion.div
               key="cashedout"
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-paper/5 border-2 border-flame rounded-2xl text-flame"
-              style={{ fontFamily: "var(--font-display)" }}
+              initial={{ y: 10, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.14 }}
+              className="absolute inset-0 flex flex-col items-center justify-center bg-surface border-2 border-flame text-flame"
+              style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
             >
-              <div className="text-xl sm:text-2xl md:text-3xl">
-                out at {p.cashedOutAt.toFixed(2)}x
+              <div className="text-xl sm:text-2xl md:text-3xl uppercase tracking-wider tabular-nums">
+                out @ {p.cashedOutAt.toFixed(2)}x
               </div>
               <div
-                className="text-base sm:text-lg text-paper/80 -mt-1"
-                style={{ fontFamily: "var(--font-hand)" }}
+                className="text-sm sm:text-base text-ink/80 -mt-1 uppercase tracking-widest tabular-nums"
+                style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
               >
                 won § {winAmount.toFixed(2)}
               </div>
@@ -102,10 +116,10 @@ export function BetPanel(p: Props) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={p.cancelBet}
-              className="absolute inset-0 border-2 border-paper/60 text-paper rounded-2xl text-xl sm:text-2xl hover:bg-paper/10"
-              style={{ fontFamily: "var(--font-hand)" }}
+              className="absolute inset-0 border-2 border-ink bg-surface text-ink text-lg sm:text-xl hover:bg-ink hover:text-bg transition-colors uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
             >
-              bet placed · cancel ({Math.ceil(p.phaseMsLeft / 1000)}s)
+              bet § {p.activeBet} — cancel ({Math.ceil(p.phaseMsLeft / 1000)}s)
             </motion.button>
           ) : p.phase === "betting" ? (
             <motion.button
@@ -115,10 +129,10 @@ export function BetPanel(p: Props) {
               exit={{ opacity: 0 }}
               onClick={p.placeBet}
               disabled={p.betInput <= 0 || p.betInput > p.balance}
-              className="absolute inset-0 bg-paper text-ink rounded-2xl text-2xl sm:text-3xl md:text-4xl shadow-[4px_4px_0_var(--color-flame)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_var(--color-flame)] transition-all disabled:opacity-40 disabled:shadow-none"
-              style={{ fontFamily: "var(--font-display)" }}
+              className="absolute inset-0 bg-ink text-bg border-2 border-ink shadow-[4px_4px_0_#ff4a00] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#ff4a00] transition-all text-2xl sm:text-3xl md:text-4xl uppercase tracking-wider disabled:opacity-40 disabled:shadow-none"
+              style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
             >
-              place bet ({Math.ceil(p.phaseMsLeft / 1000)}s)
+              place bet · {Math.ceil(p.phaseMsLeft / 1000)}s
             </motion.button>
           ) : (
             <motion.div
@@ -126,12 +140,12 @@ export function BetPanel(p: Props) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center text-paper/50 text-xl sm:text-2xl"
-              style={{ fontFamily: "var(--font-hand)" }}
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/60 text-lg sm:text-xl uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
             >
               {p.phase === "flying"
-                ? "no bet this round"
-                : "next round starting…"}
+                ? "// spectating"
+                : "// next round incoming"}
             </motion.div>
           )}
         </AnimatePresence>
