@@ -12,11 +12,13 @@ import { AstroidMark } from "@/components/AstroidMark";
 import { NameTag } from "@/components/NameTag";
 import { WalletButton } from "@/components/WalletButton";
 import { ProfileModal } from "@/components/ProfileModal";
+import { MobileMenu, HamburgerButton } from "@/components/MobileMenu";
 
 export default function Home() {
   const g = useMultiplayerGame();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const statusPill = (
     <div
@@ -32,6 +34,11 @@ export default function Home() {
       {g.connected ? "LIVE" : "OFFLINE"}
     </div>
   );
+
+  const openProfileFromMenu = () => {
+    setMenuOpen(false);
+    setProfileOpen(true);
+  };
 
   return (
     <main
@@ -63,17 +70,11 @@ export default function Home() {
             onClick={() => setHistoryOpen(true)}
           />
         </div>
-        <div className="md:hidden flex items-center gap-2">
-          <WalletButton onOpenProfile={() => setProfileOpen(true)} />
-          {statusPill}
-          <MuteButton muted={g.muted} setMuted={g.setMuted} />
+        {/* Mobile: one hamburger; desktop items live in the right column */}
+        <div className="md:hidden">
+          <HamburgerButton onClick={() => setMenuOpen(true)} />
         </div>
       </header>
-
-      {/* Mobile-only name tag row under the header */}
-      <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2">
-        <NameTag name={g.playerName} onRename={g.renamePlayer} />
-      </div>
 
       <div className="relative z-10 flex-1 min-h-0 px-2 sm:px-4 pt-2 flex gap-3 sm:gap-4">
         <section className="relative flex-1 min-w-0">
@@ -106,6 +107,15 @@ export default function Home() {
       <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2 h-[14vh] min-h-[88px]">
         <PlayersList players={g.players} phase={g.phase} selfId={g.playerId} />
       </div>
+
+      <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)}>
+        <div className="flex items-center gap-2">
+          {statusPill}
+          <MuteButton muted={g.muted} setMuted={g.setMuted} />
+        </div>
+        <WalletButton onOpenProfile={openProfileFromMenu} />
+        <NameTag name={g.playerName} onRename={g.renamePlayer} />
+      </MobileMenu>
 
       <HistoryModal
         history={g.history}
