@@ -40,3 +40,23 @@ input[type="number"] {
 .no-scrollbar {
   scrollbar-width: none;
 }
+
+/* Tailwind v4 preflight drops the UA pointer cursor on buttons — put it back
+   so every click target shows the hand. */
+button,
+[role="button"],
+label,
+summary,
+select,
+[type="button"],
+[type="reset"],
+[type="submit"] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"],
+[type="button"]:disabled,
+[type="submit"]:disabled {
+  cursor: not-allowed;
+}

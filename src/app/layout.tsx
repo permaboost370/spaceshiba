@@ -14,7 +14,7 @@ const hand = Caveat({
 });
 
 export const metadata: Metadata = {
-  title: "Crash — to the moon",
+  title: "SPACESHIBA | ASTROID",
   description: "Cash out before the dog goes too far.",
 };
 
