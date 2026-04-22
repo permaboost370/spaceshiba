@@ -7,6 +7,7 @@ import { MuteButton } from "@/components/MuteButton";
 import { BackgroundFX } from "@/components/BackgroundFX";
 import { PlayersList } from "@/components/PlayersList";
 import { AstroidMark } from "@/components/AstroidMark";
+import { NameTag } from "@/components/NameTag";
 
 export default function Home() {
   const g = useMultiplayerGame();
@@ -60,6 +61,11 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Mobile-only name tag row under the header */}
+      <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2">
+        <NameTag name={g.playerName} onRename={g.renamePlayer} />
+      </div>
+
       <div className="relative z-10 flex-1 min-h-0 px-2 sm:px-4 pt-2 flex gap-3 sm:gap-4">
         <section className="relative flex-1 min-w-0">
           <CrashGraph
@@ -77,6 +83,7 @@ export default function Home() {
             {statusPill}
             <MuteButton muted={g.muted} setMuted={g.setMuted} />
           </div>
+          <NameTag name={g.playerName} onRename={g.renamePlayer} />
           <div className="flex-1 min-h-0">
             <PlayersList
               players={g.players}
