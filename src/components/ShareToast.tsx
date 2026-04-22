@@ -17,13 +17,16 @@ type Props = {
 const AUTO_DISMISS_MS = 15000;
 
 // Builds the twitter.com/intent/tweet URL. The shared link points at
-// /w/<multiplier>, which carries a per-win Open Graph card that X will
-// unfurl as the tweet's preview image.
-function buildTweetUrl(mult: number) {
+// /w/<multiplier>?v=<nonce>, which carries a per-win Open Graph card
+// that X will unfurl as the tweet's preview image. The nonce is a
+// cache-buster — X caches card previews per URL for ~7 days, so a
+// fresh nonce per share guarantees X re-fetches and shows the right
+// multiplier instead of a stale preview.
+function buildTweetUrl(mult: number, nonce: number) {
   const mStr = mult.toFixed(2);
   const origin =
     typeof window !== "undefined" ? window.location.origin : "";
-  const shareUrl = `${origin}/w/${mStr}`;
+  const shareUrl = `${origin}/w/${mStr}?v=${nonce.toString(36)}`;
   const text =
     `Just hit ${mStr}x on $SPACESHIBA 🚀\n` +
     `All fees go to charity.\n`;
@@ -44,7 +47,7 @@ export function ShareToast({ lastWin, onDismiss }: Props) {
 
   const handleShare = () => {
     if (!lastWin) return;
-    const url = buildTweetUrl(lastWin.multiplier);
+    const url = buildTweetUrl(lastWin.multiplier, lastWin.id);
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
