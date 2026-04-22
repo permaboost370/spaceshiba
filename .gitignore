@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+.env*.local
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+
+# reference images used during development, not part of the app
+test.jpg

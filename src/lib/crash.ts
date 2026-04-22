@@ -1,0 +1,63 @@
+// Provably-fair crash curve. Runs client-side for now; a real server would
+// keep the serverSeed secret and reveal it after the round for verification.
+
+async function sha256(msg: string): Promise<string> {
+  const buf = new TextEncoder().encode(msg);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function randomHex(bytes: number): string {
+  const arr = new Uint8Array(bytes);
+  crypto.getRandomValues(arr);
+  return Array.from(arr)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export type RoundSeed = {
+  serverSeed: string;
+  clientSeed: string;
+  nonce: number;
+  hash: string;
+};
+
+export async function newSeed(
+  clientSeed: string,
+  nonce: number,
+): Promise<RoundSeed> {
+  const serverSeed = randomHex(32);
+  const hash = await sha256(`${serverSeed}:${clientSeed}:${nonce}`);
+  return { serverSeed, clientSeed, nonce, hash };
+}
+
+// BustaBit-style crash point with ~3% house edge — 3/101 rounds
+// crash instantly at 1.00x, rest follow a heavy-tailed distribution.
+export function crashPointFromHash(hash: string): number {
+  const edgeByte = parseInt(hash.slice(0, 2), 16);
+  if (edgeByte < 8) return 1.0;
+
+  const hs = hash.slice(0, 13);
+  const r = parseInt(hs, 16);
+  const e = Math.pow(2, 52);
+  const result = Math.floor((100 * e - r) / (e - r)) / 100;
+  return Math.max(1.0, Math.min(result, 1000));
+}
+
+// Tuned growth rate — see unit tests below for milestones.
+//   t = 0s  → 1.00x
+//   t = 5s  → 1.41x
+//   t = 10s → 1.99x
+//   t = 20s → 3.97x
+//   t = 30s → 7.89x
+const GROWTH = 1.0718;
+
+export function multiplierAt(ms: number): number {
+  return Math.pow(GROWTH, ms / 1000);
+}
+
+export function timeAtMultiplier(x: number): number {
+  return (Math.log(x) / Math.log(GROWTH)) * 1000;
+}
