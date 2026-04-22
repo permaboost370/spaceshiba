@@ -17,6 +17,24 @@ const hand = VT323({
 export const metadata: Metadata = {
   title: "SPACESHIBA | ASTROID",
   description: "Cash out before the dog goes too far.",
+  openGraph: {
+    title: "SPACESHIBA | ASTROID",
+    description: "Cash out before the dog goes too far.",
+    images: [
+      {
+        url: "/logo.jpg",
+        width: 1000,
+        height: 1000,
+        alt: "Space Shiba astronaut rocket",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SPACESHIBA | ASTROID",
+    description: "Cash out before the dog goes too far.",
+    images: ["/logo.jpg"],
+  },
 };
 
 export default function RootLayout({
