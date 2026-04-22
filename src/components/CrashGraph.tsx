@@ -5,6 +5,22 @@ import { multiplierAt } from "@/lib/crash";
 import type { Phase } from "@/lib/useMultiplayerGame";
 import { Flame } from "./Flame";
 
+// Astroid keyframes — x = radius - radius·cos³(s), y = -radius·sin³(s).
+// Starting point is the shiba's crash position (0,0); the curve traces a full
+// astroid centered to the right and above, so the shiba ricochets through all
+// four cusps before returning and fading out.
+const ASTROID_STEPS = 48;
+const ASTROID_RADIUS = 110;
+const ASTROID_X: number[] = [];
+const ASTROID_Y: number[] = [];
+for (let i = 0; i <= ASTROID_STEPS; i++) {
+  const s = (i / ASTROID_STEPS) * Math.PI * 2;
+  const c = Math.cos(s);
+  const sn = Math.sin(s);
+  ASTROID_X.push(ASTROID_RADIUS - ASTROID_RADIUS * c * c * c);
+  ASTROID_Y.push(-ASTROID_RADIUS * sn * sn * sn);
+}
+
 const VB_W = 1000;
 const VB_H = 600;
 const PAD_L = 70;
@@ -124,7 +140,7 @@ export function CrashGraph({
               y1={y}
               x2={PAD_L + GRAPH_W}
               y2={y}
-              stroke="rgba(10,10,10,0.09)"
+              stroke="rgba(244,236,216,0.08)"
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
             />
@@ -139,7 +155,7 @@ export function CrashGraph({
               y1={PAD_T}
               x2={x}
               y2={PAD_T + GRAPH_H}
-              stroke="rgba(10,10,10,0.09)"
+              stroke="rgba(244,236,216,0.08)"
               strokeWidth={1}
               vectorEffect="non-scaling-stroke"
             />
@@ -152,7 +168,7 @@ export function CrashGraph({
           y1={PAD_T}
           x2={PAD_L}
           y2={PAD_T + GRAPH_H}
-          stroke="rgba(10,10,10,0.9)"
+          stroke="rgba(244,236,216,0.55)"
           strokeWidth={2}
           vectorEffect="non-scaling-stroke"
         />
@@ -161,7 +177,7 @@ export function CrashGraph({
           y1={PAD_T + GRAPH_H}
           x2={PAD_L + GRAPH_W}
           y2={PAD_T + GRAPH_H}
-          stroke="rgba(10,10,10,0.9)"
+          stroke="rgba(244,236,216,0.55)"
           strokeWidth={2}
           vectorEffect="non-scaling-stroke"
         />
@@ -191,11 +207,11 @@ export function CrashGraph({
             <path
               d={pathD}
               fill="none"
-              stroke="#0a0a0a"
+              stroke="#fff4d0"
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
-              opacity={0.7}
+              opacity={0.85}
               vectorEffect="non-scaling-stroke"
             />
           </>
@@ -365,9 +381,15 @@ function ShibaPilot({
         <motion.div
           className="w-full h-full relative"
           style={{ transformOrigin: "50% 88%" }}
-          initial={{ rotate: rot, opacity: 1, scale: 1, y: 0 }}
-          animate={{ rotate: rot + 540, opacity: 0, scale: 0.55, y: 520 }}
-          transition={{ duration: 1.8, ease: "easeIn" }}
+          initial={{ x: 0, y: 0, rotate: rot, opacity: 1, scale: 1 }}
+          animate={{
+            x: ASTROID_X,
+            y: ASTROID_Y,
+            rotate: rot + 540,
+            opacity: [1, 0.95, 0.7, 0.35, 0],
+            scale: [1, 0.95, 0.78, 0.5, 0.22],
+          }}
+          transition={{ duration: 1.9, ease: [0.22, 0.6, 0.3, 1] }}
         >
           <img
             src="/shiba.png"

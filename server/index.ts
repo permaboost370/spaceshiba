@@ -1,10 +1,9 @@
 // Multiplayer crash game server.
-// - owns the round loop (betting → flying → crashed → betting)
-// - broadcasts state on phase changes and player events (not every tick,
-//   clients interpolate the multiplier locally with RAF)
-// - each player gets a generated name on connect, client holds its own balance
-//   (fake money; trust is intentional for this demo)
+// Listens on a single HTTP port (Railway sets PORT) and upgrades websocket
+// connections. HTTP GET / returns a small status page so platform health
+// checks are happy.
 
+import http from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import { randomUUID, webcrypto } from "node:crypto";
 import {
@@ -14,8 +13,6 @@ import {
   type RoundSeed,
 } from "../src/lib/crash";
 
-// Ensure globalThis.crypto is set for crash.ts (Node 20+ has it, but some
-// runtimes / older Node 18 may not)
 if (!(globalThis as unknown as { crypto?: Crypto }).crypto) {
   (globalThis as unknown as { crypto: Crypto }).crypto = webcrypto as unknown as Crypto;
 }
@@ -82,7 +79,6 @@ function publicState() {
     phase: state.phase,
     elapsedMs,
     phaseMsLeft,
-    // Only reveal crashPoint + seed after the round has crashed
     crashPoint: state.phase === "crashed" ? state.crashPoint : null,
     seed:
       state.phase === "crashed"
@@ -179,7 +175,28 @@ async function tick() {
   }
 }
 
-const wss = new WebSocketServer({ port: PORT });
+const httpServer = http.createServer((req, res) => {
+  if (req.url === "/health") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        phase: state.phase,
+        players: state.players.size,
+        nonce: state.nonce,
+      }),
+    );
+    return;
+  }
+  res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+  res.end(
+    `SPACESHIBA | ASTROID — multiplayer crash server\n` +
+      `connect via websocket on this URL\n` +
+      `phase: ${state.phase}, players: ${state.players.size}, nonce: ${state.nonce}\n`,
+  );
+});
+
+const wss = new WebSocketServer({ server: httpServer });
 
 wss.on("connection", (ws) => {
   const id = randomUUID();
@@ -217,7 +234,6 @@ wss.on("connection", (ws) => {
       const now = Date.now();
       const elapsed = now - state.phaseStartedAt;
       const m = multiplierAt(elapsed);
-      // cap at actual crash point in case of race
       const cp = state.crashPoint;
       player.cashedOutAt = cp !== null ? Math.min(m, cp) : m;
       broadcastState();
@@ -253,5 +269,7 @@ wss.on("connection", (ws) => {
   setInterval(() => {
     tick().catch((e) => console.error("tick error", e));
   }, TICK_MS);
-  console.log(`[spaceshiba] websocket server listening on :${PORT}`);
+  httpServer.listen(PORT, "0.0.0.0", () => {
+    console.log(`[spaceshiba] http + ws listening on :${PORT}`);
+  });
 })();

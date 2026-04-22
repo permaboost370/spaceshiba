@@ -11,6 +11,21 @@ import { AstroidMark } from "@/components/AstroidMark";
 export default function Home() {
   const g = useMultiplayerGame();
 
+  const statusPill = (
+    <div
+      className={`shrink-0 flex items-center gap-1.5 px-2 py-1 border-2 border-ink bg-surface text-[10px] sm:text-xs uppercase tracking-widest ${
+        g.connected ? "text-ink" : "text-danger"
+      }`}
+      style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+      title={g.connected ? "connected" : "offline"}
+    >
+      <span
+        className={`inline-block w-2 h-2 ${g.connected ? "bg-flame" : "bg-danger"} animate-pulse`}
+      />
+      {g.connected ? "LIVE" : "OFFLINE"}
+    </div>
+  );
+
   return (
     <main
       className="relative w-full flex flex-col overflow-hidden"
@@ -19,9 +34,7 @@ export default function Home() {
       <BackgroundFX phase={g.phase} multiplier={g.multiplier} />
 
       <header className="relative z-20 flex items-center gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
-        <div
-          className="shrink-0 flex items-center gap-2 px-2 py-1 border-2 border-ink bg-surface"
-        >
+        <div className="shrink-0 flex items-center gap-2 px-2 py-1 border-2 border-ink bg-surface">
           <AstroidMark size={20} color="var(--color-flame)" />
           <span
             className="text-ink uppercase tracking-[0.18em] text-xs sm:text-sm leading-none"
@@ -39,24 +52,15 @@ export default function Home() {
         <div className="flex-1 min-w-0">
           <HistoryStrip history={g.history} />
         </div>
-        <div
-          className={`shrink-0 hidden sm:flex items-center gap-1.5 px-2 py-1 border-2 border-ink bg-surface text-xs uppercase tracking-widest ${
-            g.connected ? "text-ink" : "text-danger"
-          }`}
-          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-          title={g.connected ? "connected" : "offline"}
-        >
-          <span
-            className={`inline-block w-2 h-2 ${g.connected ? "bg-flame" : "bg-danger"} animate-pulse`}
-            style={{ borderRadius: 0 }}
-          />
-          {g.connected ? "live" : "offline"}
+        {/* Live indicator + mute — shown in header on mobile; on desktop they
+            live in the right column above the pilots list. */}
+        <div className="md:hidden flex items-center gap-2">
+          {statusPill}
+          <MuteButton muted={g.muted} setMuted={g.setMuted} />
         </div>
-        <MuteButton muted={g.muted} setMuted={g.setMuted} />
       </header>
 
       <div className="relative z-10 flex-1 min-h-0 px-2 sm:px-4 pt-2 flex gap-3 sm:gap-4">
-        {/* Graph — takes most of the space */}
         <section className="relative flex-1 min-w-0">
           <CrashGraph
             phase={g.phase}
@@ -67,17 +71,23 @@ export default function Home() {
           />
         </section>
 
-        {/* Players side panel — hidden on narrow mobile */}
-        <aside className="hidden md:flex w-56 lg:w-64 shrink-0">
-          <PlayersList
-            players={g.players}
-            phase={g.phase}
-            selfId={g.playerId}
-          />
+        {/* Desktop right column: status + mute stacked above pilots list */}
+        <aside className="hidden md:flex flex-col w-56 lg:w-64 shrink-0 gap-2 min-h-0">
+          <div className="flex items-center gap-2 justify-end">
+            {statusPill}
+            <MuteButton muted={g.muted} setMuted={g.setMuted} />
+          </div>
+          <div className="flex-1 min-h-0">
+            <PlayersList
+              players={g.players}
+              phase={g.phase}
+              selfId={g.playerId}
+            />
+          </div>
         </aside>
       </div>
 
-      {/* Mobile-only: players drawer above bet panel */}
+      {/* Mobile-only pilots drawer above bet panel */}
       <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2 max-h-[22vh]">
         <PlayersList players={g.players} phase={g.phase} selfId={g.playerId} />
       </div>
