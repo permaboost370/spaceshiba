@@ -6,7 +6,9 @@
    - sharp corners, thick cream borders, hard offset shadows
    - monospace type throughout */
 @theme {
-  --color-bg: #0a0a0a;
+  /* matches the edge colour of public/bg.jpg so `background-size: contain`
+     letterboxes blend seamlessly with the art */
+  --color-bg: #020204;
   --color-surface: #151515;
   --color-ink: #f4ecd8;
   --color-paper: #f4ecd8; /* legacy alias */
