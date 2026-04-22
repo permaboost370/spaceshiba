@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Space_Mono } from "next/font/google";
+import { Michroma, Space_Mono } from "next/font/google";
 import "./globals.css";
 
-// Digital brutalism: Space Grotesk for display headings (chunky geometric
-// sans), Space Mono for everything else (monospace, terminal-y).
-const display = Space_Grotesk({
-  weight: ["500", "700"],
+// Michroma for display — closest Google Fonts match to the Polaris Dawn
+// wordmark (wide geometric all-caps). Space Mono for body / labels.
+const display = Michroma({
+  weight: "400",
   subsets: ["latin"],
   variable: "--font-display",
 });

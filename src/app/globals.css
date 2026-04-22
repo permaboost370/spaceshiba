@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
-/* Digital brutalism, light mode:
-   - cream/white base, ink-black text
-   - single hot-orange accent for flame/action
-   - red for danger (crash)
-   - sharp corners, thick ink borders, hard offset shadows
+/* Digital brutalism, dark mode:
+   - near-black base, cream ink
+   - hot orange accent, bright red for crash
+   - sharp corners, thick cream borders, hard offset shadows
    - monospace type throughout */
 @theme {
-  --color-bg: #f4ecd8;
-  --color-surface: #ffffff;
-  --color-ink: #0a0a0a;
-  --color-paper: #0a0a0a; /* legacy alias used by some components → now points at ink */
+  --color-bg: #0a0a0a;
+  --color-surface: #151515;
+  --color-ink: #f4ecd8;
+  --color-paper: #f4ecd8; /* legacy alias */
   --color-flame: #ff4a00;
   --color-flame-bright: #ffb400;
-  --color-danger: #e21414;
+  --color-danger: #ff5555;
   --color-muted: #7a7163;
+  --color-on-flame: #0a0a0a;
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html,
@@ -34,7 +34,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Hide scrollbars on horizontal lists */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -42,7 +41,6 @@ body {
   scrollbar-width: none;
 }
 
-/* Brutalist cursor policy */
 button,
 [role="button"],
 label,
@@ -61,15 +59,14 @@ button:disabled,
   cursor: not-allowed;
 }
 
-/* Graph-paper grid that sits behind the whole stage */
+/* Graph-paper grid — cream lines at very low opacity on black */
 .graph-paper {
   background-image:
-    linear-gradient(to right, rgba(10, 10, 10, 0.05) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(10, 10, 10, 0.05) 1px, transparent 1px);
+    linear-gradient(to right, rgba(244, 236, 216, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(244, 236, 216, 0.04) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
-/* Brutalist surface: white card, thick ink border, hard offset shadow */
 .brut {
   background: var(--color-surface);
   border: 2px solid var(--color-ink);
@@ -83,7 +80,6 @@ button:disabled,
   border-radius: 0;
 }
 
-/* Common button style so BetPanel can compose them */
 .brut-btn {
   background: var(--color-ink);
   color: var(--color-bg);
@@ -100,6 +96,6 @@ button:disabled,
 
 .brut-btn-primary {
   background: var(--color-flame);
-  color: var(--color-ink);
+  color: var(--color-on-flame);
   border-color: var(--color-ink);
 }

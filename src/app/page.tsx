@@ -6,6 +6,7 @@ import { HistoryStrip } from "@/components/HistoryStrip";
 import { MuteButton } from "@/components/MuteButton";
 import { BackgroundFX } from "@/components/BackgroundFX";
 import { PlayersList } from "@/components/PlayersList";
+import { AstroidMark } from "@/components/AstroidMark";
 
 export default function Home() {
   const g = useMultiplayerGame();
@@ -19,10 +20,21 @@ export default function Home() {
 
       <header className="relative z-20 flex items-center gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
         <div
-          className="shrink-0 px-2 py-1 border-2 border-ink bg-surface uppercase tracking-widest text-xs sm:text-sm"
-          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+          className="shrink-0 flex items-center gap-2 px-2 py-1 border-2 border-ink bg-surface"
         >
-          SPACESHIBA · ASTROID
+          <AstroidMark size={20} color="var(--color-flame)" />
+          <span
+            className="text-ink uppercase tracking-[0.18em] text-xs sm:text-sm leading-none"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            SPACESHIBA
+          </span>
+          <span
+            className="hidden sm:inline text-ink/45 text-[10px] tracking-[0.2em] leading-none"
+            style={{ fontFamily: "var(--font-display)" }}
+          >
+            // ASTROID
+          </span>
         </div>
         <div className="flex-1 min-w-0">
           <HistoryStrip history={g.history} />
