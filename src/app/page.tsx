@@ -18,13 +18,13 @@ export default function Home() {
   const statusPill = (
     <div
       className={`shrink-0 flex items-center gap-1.5 px-2 py-1 border-2 border-ink bg-surface text-[10px] sm:text-xs uppercase tracking-widest ${
-        g.connected ? "text-ink" : "text-danger"
+        g.connected ? "text-success" : "text-danger"
       }`}
       style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       title={g.connected ? "connected" : "offline"}
     >
       <span
-        className={`inline-block w-2 h-2 ${g.connected ? "bg-flame" : "bg-danger"} animate-pulse`}
+        className={`inline-block w-2 h-2 ${g.connected ? "bg-success" : "bg-danger"} animate-pulse`}
       />
       {g.connected ? "LIVE" : "OFFLINE"}
     </div>

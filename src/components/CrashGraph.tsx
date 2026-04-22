@@ -5,19 +5,20 @@ import { multiplierAt } from "@/lib/crash";
 import type { Phase } from "@/lib/useMultiplayerGame";
 import { Flame } from "./Flame";
 
-// Astroid keyframes — x = radius - radius·cos³(s), y = -radius·sin³(s).
-// Starting point is the shiba's crash position (0,0); the curve traces a full
-// astroid centered to the right and above, so the shiba ricochets through all
-// four cusps before returning and fading out.
+// Astroid keyframes — x = radius·cos³(s), y = -radius·sin³(s). The astroid
+// is centered at the crash point; we prepend (0,0) so the first keyframe is
+// the crash position itself, then the shiba blasts outward to the east cusp
+// and traces the full 4-cusp loop. Ends back near the east cusp as opacity
+// fades to 0.
 const ASTROID_STEPS = 64;
 const ASTROID_RADIUS = 140;
-const ASTROID_X: number[] = [];
-const ASTROID_Y: number[] = [];
+const ASTROID_X: number[] = [0];
+const ASTROID_Y: number[] = [0];
 for (let i = 0; i <= ASTROID_STEPS; i++) {
   const s = (i / ASTROID_STEPS) * Math.PI * 2;
   const c = Math.cos(s);
   const sn = Math.sin(s);
-  ASTROID_X.push(ASTROID_RADIUS - ASTROID_RADIUS * c * c * c);
+  ASTROID_X.push(ASTROID_RADIUS * c * c * c);
   ASTROID_Y.push(-ASTROID_RADIUS * sn * sn * sn);
 }
 
