@@ -158,12 +158,18 @@ export function useMultiplayerGame() {
       }
       cashedOutAtRef.current = myCashedOut;
 
-      // If I had a bet placed but I lost (round crashed without cashing out),
-      // balance stays debited from when we placed the bet — no action needed.
-      // If server rejected my bet somehow (rare), activeBetRef would be null
-      // while I'd already debited. Detect and refund:
-      if (s.phase === "betting" && myselfBefore !== null && myBet === null) {
-        // server no longer shows my bet — refund locally
+      // If the server drops my bet WHILE we're still in the betting phase
+      // (I cancelled, or server rejected), refund the debited amount.
+      // Important: only refund when prev and current are both "betting";
+      // on the crashed→betting transition the server naturally clears all
+      // bets for the new round, and those were already lost — refunding
+      // there was the bug that made losses invisible.
+      if (
+        prevPhase === "betting" &&
+        s.phase === "betting" &&
+        myselfBefore !== null &&
+        myBet === null
+      ) {
         setBalance((b) => b + myselfBefore);
       }
     },

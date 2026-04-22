@@ -1,9 +1,9 @@
 "use client";
 import type { Phase } from "@/lib/useMultiplayerGame";
-import { Moon } from "./Moon";
 
-// Brutalist background: cream graph-paper grid + hand-drawn moon in the
-// upper right + warm ambient glow that intensifies with the multiplier.
+// Brutalist background: branded bg.jpg (SPACESHIBA/ASTROID moon art) under a
+// dark overlay, graph-paper grid on top, warm ambient glow that heats up
+// with the multiplier.
 type Props = {
   phase: Phase;
   multiplier: number;
@@ -16,21 +16,30 @@ export function BackgroundFX({ phase, multiplier }: Props) {
 
   return (
     <div
-      className="absolute inset-0 overflow-hidden pointer-events-none graph-paper"
+      className="absolute inset-0 overflow-hidden pointer-events-none"
       aria-hidden
     >
-      {/* Moon — parked in the upper right, partially off-screen so it feels
-          like it's peeking into frame. */}
+      {/* Branded background image */}
       <div
-        className="absolute"
+        className="absolute inset-0"
         style={{
-          top: "clamp(-4vmin, -3vmin, 0vmin)",
-          right: "clamp(-6vmin, -4vmin, 0vmin)",
-          opacity: 0.9,
+          backgroundImage: "url(/bg.jpg)",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          opacity: 0.55,
         }}
-      >
-        <Moon size="clamp(180px, 34vmin, 460px)" />
-      </div>
+      />
+      {/* Darkening veil so UI stays readable on all screen sizes */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(10,10,10,0.5) 0%, rgba(10,10,10,0.35) 40%, rgba(10,10,10,0.7) 100%)",
+        }}
+      />
+      {/* Graph-paper grid on top of the bg */}
+      <div className="absolute inset-0 graph-paper opacity-60" />
 
       {/* Warm ambient glow that heats up with multiplier */}
       <div

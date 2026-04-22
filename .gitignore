@@ -8,6 +8,8 @@ next-env.d.ts
 
 # reference images used during development, not part of the app
 test.jpg
+# high-res source for bg — web uses public/bg.jpg instead
+bg.png
 
 .vercel
 .env*.local
