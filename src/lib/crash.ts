@@ -3,7 +3,12 @@
 
 async function sha256(msg: string): Promise<string> {
   const buf = new TextEncoder().encode(msg);
-  const digest = await crypto.subtle.digest("SHA-256", buf);
+  // Cast works around a newer lib.dom/Node type conflict introduced by
+  // @solana/* deps — runtime Uint8Array satisfies BufferSource fine.
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    buf as unknown as BufferSource,
+  );
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

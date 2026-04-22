@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Michroma, Space_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "./providers";
 
 // Michroma for display — closest Google Fonts match to the Polaris Dawn
 // wordmark (wide geometric all-caps). Space Mono for body / labels.
@@ -44,7 +45,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${display.variable} ${hand.variable}`}>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

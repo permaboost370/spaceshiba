@@ -10,10 +10,13 @@ import { BackgroundFX } from "@/components/BackgroundFX";
 import { PlayersList } from "@/components/PlayersList";
 import { AstroidMark } from "@/components/AstroidMark";
 import { NameTag } from "@/components/NameTag";
+import { WalletButton } from "@/components/WalletButton";
+import { ProfileModal } from "@/components/ProfileModal";
 
 export default function Home() {
   const g = useMultiplayerGame();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const statusPill = (
     <div
@@ -60,9 +63,8 @@ export default function Home() {
             onClick={() => setHistoryOpen(true)}
           />
         </div>
-        {/* Live indicator + mute — shown in header on mobile; on desktop they
-            live in the right column above the pilots list. */}
         <div className="md:hidden flex items-center gap-2">
+          <WalletButton onOpenProfile={() => setProfileOpen(true)} />
           {statusPill}
           <MuteButton muted={g.muted} setMuted={g.setMuted} />
         </div>
@@ -84,12 +86,12 @@ export default function Home() {
           />
         </section>
 
-        {/* Desktop right column: status + mute stacked above pilots list */}
         <aside className="hidden md:flex flex-col w-56 lg:w-64 shrink-0 gap-2 min-h-0">
           <div className="flex items-center gap-2 justify-end">
             {statusPill}
             <MuteButton muted={g.muted} setMuted={g.setMuted} />
           </div>
+          <WalletButton onOpenProfile={() => setProfileOpen(true)} />
           <NameTag name={g.playerName} onRename={g.renamePlayer} />
           <div className="flex-1 min-h-0">
             <PlayersList
@@ -101,7 +103,6 @@ export default function Home() {
         </aside>
       </div>
 
-      {/* Mobile-only pilots drawer above bet panel */}
       <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2 h-[14vh] min-h-[88px]">
         <PlayersList players={g.players} phase={g.phase} selfId={g.playerId} />
       </div>
@@ -110,6 +111,15 @@ export default function Home() {
         history={g.history}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
+      />
+      <ProfileModal
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        walletAddress={g.walletAddress}
+        name={g.playerName}
+        onRename={g.renamePlayer}
+        history={g.myHistory}
+        balance={g.balance}
       />
 
       <section className="relative z-10 px-3 sm:px-4 pb-3 sm:pb-4 pt-2">

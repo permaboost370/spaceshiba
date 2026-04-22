@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { multiplierAt } from "./crash";
 import { useAudio } from "./useAudio";
 
@@ -20,6 +21,17 @@ export type RoundHistory = {
   winners: number;
   totalWagered: number;
   totalPaidOut: number;
+};
+
+// Personal per-round result — persisted in localStorage keyed by wallet
+export type MyRoundResult = {
+  nonce: number;
+  crashPoint: number;
+  bet: number;
+  cashedOutAt: number | null;
+  payout: number;
+  won: boolean;
+  timestamp: number;
 };
 
 type ServerState = {
@@ -45,11 +57,21 @@ const WS_URL =
     ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:3101`
     : "ws://localhost:3101");
 
-const BALANCE_KEY = "spaceshiba.balance.v1";
-const NAME_KEY = "spaceshiba.name.v1";
 const DEFAULT_BALANCE = 1000;
 
+// localStorage key helpers — scoped to wallet address when connected,
+// or to "anon" for disconnected users
+const nameKey = (addr: string | null) =>
+  `spaceshiba.name.${addr ?? "anon"}`;
+const balanceKey = (addr: string | null) =>
+  `spaceshiba.balance.${addr ?? "anon"}`;
+const historyKey = (addr: string | null) =>
+  `spaceshiba.myhistory.${addr ?? "anon"}`;
+
 export function useMultiplayerGame() {
+  const { publicKey } = useWallet();
+  const walletAddress = publicKey?.toBase58() ?? null;
+
   const [connected, setConnected] = useState(false);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState<string>("");
@@ -64,9 +86,13 @@ export function useMultiplayerGame() {
 
   const [balance, setBalance] = useState<number>(DEFAULT_BALANCE);
   const [betInput, setBetInput] = useState<number>(100);
+  const [myHistory, setMyHistory] = useState<MyRoundResult[]>([]);
 
-  // Local clock anchor for interpolating multiplier between server updates
-  const phaseAnchorRef = useRef<{ phase: Phase; localStart: number; serverElapsed: number }>({
+  const phaseAnchorRef = useRef<{
+    phase: Phase;
+    localStart: number;
+    serverElapsed: number;
+  }>({
     phase: "betting",
     localStart: typeof performance !== "undefined" ? performance.now() : 0,
     serverElapsed: 0,
@@ -77,111 +103,179 @@ export function useMultiplayerGame() {
   const lastTickSecondRef = useRef<number>(-1);
   const wsRef = useRef<WebSocket | null>(null);
   const playerIdRef = useRef<string | null>(null);
+  const walletAddressRef = useRef<string | null>(null);
+  walletAddressRef.current = walletAddress;
 
   const audio = useAudio();
   const audioRef = useRef(audio);
   audioRef.current = audio;
 
-  // Load persisted balance + name on mount
+  // Load profile (name, balance, myHistory) when wallet address changes.
+  // Anonymous / pre-connect uses the "anon" bucket.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const b = window.localStorage.getItem(BALANCE_KEY);
-    if (b !== null) {
-      const n = Number(b);
-      if (Number.isFinite(n) && n >= 0) setBalance(n);
-    }
-    const n = window.localStorage.getItem(NAME_KEY);
-    if (n) setPlayerName(n);
-  }, []);
+    const nk = nameKey(walletAddress);
+    const bk = balanceKey(walletAddress);
+    const hk = historyKey(walletAddress);
 
-  // Persist balance
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(BALANCE_KEY, String(balance));
-  }, [balance]);
+    const storedName = window.localStorage.getItem(nk);
+    if (storedName) {
+      setPlayerName(storedName);
+    } else if (walletAddress) {
+      // fresh wallet: default name = shortened address
+      const defaultName = `${walletAddress.slice(0, 4)}…${walletAddress.slice(-4)}`;
+      setPlayerName(defaultName);
+    } else {
+      setPlayerName("");
+    }
+
+    const storedBalance = window.localStorage.getItem(bk);
+    if (storedBalance !== null) {
+      const n = Number(storedBalance);
+      if (Number.isFinite(n) && n >= 0) setBalance(n);
+      else setBalance(DEFAULT_BALANCE);
+    } else {
+      setBalance(DEFAULT_BALANCE);
+    }
+
+    const storedHistory = window.localStorage.getItem(hk);
+    if (storedHistory) {
+      try {
+        const parsed = JSON.parse(storedHistory) as MyRoundResult[];
+        if (Array.isArray(parsed)) setMyHistory(parsed);
+      } catch {
+        setMyHistory([]);
+      }
+    } else {
+      setMyHistory([]);
+    }
+  }, [walletAddress]);
 
   // Persist name
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (playerName) window.localStorage.setItem(NAME_KEY, playerName);
+    if (!playerName) return;
+    window.localStorage.setItem(nameKey(walletAddress), playerName);
+  }, [playerName, walletAddress]);
+
+  // Persist balance
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(balanceKey(walletAddress), String(balance));
+  }, [balance, walletAddress]);
+
+  // Persist personal history
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      historyKey(walletAddress),
+      JSON.stringify(myHistory.slice(0, 50)),
+    );
+  }, [myHistory, walletAddress]);
+
+  // Sync name to server when name changes and we're connected
+  useEffect(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !playerName) return;
+    try {
+      ws.send(JSON.stringify({ type: "setName", name: playerName }));
+    } catch {
+      /* ignore */
+    }
   }, [playerName]);
 
-  const applyServerState = useCallback(
-    (s: ServerState) => {
-      const prevPhase = phaseAtAnchorRef.current;
-      const myselfBefore = activeBetRef.current;
-      const cashedBefore = cashedOutAtRef.current;
+  const applyServerState = useCallback((s: ServerState) => {
+    const prevPhase = phaseAtAnchorRef.current;
+    const myselfBefore = activeBetRef.current;
+    const cashedBefore = cashedOutAtRef.current;
 
-      // Rebase local clock so interpolation continues from what server says now
-      phaseAnchorRef.current = {
-        phase: s.phase,
-        localStart: performance.now() - s.elapsedMs,
-        serverElapsed: s.elapsedMs,
-      };
-      phaseAtAnchorRef.current = s.phase;
+    phaseAnchorRef.current = {
+      phase: s.phase,
+      localStart: performance.now() - s.elapsedMs,
+      serverElapsed: s.elapsedMs,
+    };
+    phaseAtAnchorRef.current = s.phase;
 
-      setPhase(s.phase);
-      setElapsedMs(s.elapsedMs);
-      setPhaseMsLeft(s.phaseMsLeft);
-      setCrashPoint(s.crashPoint);
-      setHistory(s.history);
-      setPlayers(s.players);
+    setPhase(s.phase);
+    setElapsedMs(s.elapsedMs);
+    setPhaseMsLeft(s.phaseMsLeft);
+    setCrashPoint(s.crashPoint);
+    setHistory(s.history);
+    setPlayers(s.players);
 
-      const pid = playerIdRef.current;
-      const me = pid ? s.players.find((p) => p.id === pid) : null;
-      const myBet = me?.bet ?? null;
-      const myCashedOut = me?.cashedOutAt ?? null;
-      activeBetRef.current = myBet;
+    const pid = playerIdRef.current;
+    const me = pid ? s.players.find((p) => p.id === pid) : null;
+    const myBet = me?.bet ?? null;
+    const myCashedOut = me?.cashedOutAt ?? null;
+    activeBetRef.current = myBet;
 
-      const ca = audioRef.current;
+    const ca = audioRef.current;
 
-      if (s.phase !== prevPhase) {
-        if (s.phase === "flying") {
-          lastTickSecondRef.current = -1;
-          ca.launch();
-          ca.startEngine();
-          setMultiplier(1);
-        } else if (s.phase === "crashed") {
-          ca.stopEngine();
-          ca.crashBoom();
-          if (s.crashPoint !== null) setMultiplier(s.crashPoint);
-        } else if (s.phase === "betting") {
-          setMultiplier(1);
-          lastTickSecondRef.current = -1;
+    if (s.phase !== prevPhase) {
+      if (s.phase === "flying") {
+        lastTickSecondRef.current = -1;
+        ca.launch();
+        ca.startEngine();
+        setMultiplier(1);
+      } else if (s.phase === "crashed") {
+        ca.stopEngine();
+        ca.crashBoom();
+        if (s.crashPoint !== null) setMultiplier(s.crashPoint);
+
+        // Record personal history if I had a bet this round
+        if (
+          prevPhase === "flying" &&
+          myselfBefore !== null &&
+          s.crashPoint !== null &&
+          s.seed
+        ) {
+          const cashed = cashedBefore; // settled before this update
+          const payout = cashed !== null ? myselfBefore * cashed : 0;
+          const entry: MyRoundResult = {
+            nonce: s.seed.nonce,
+            crashPoint: s.crashPoint,
+            bet: myselfBefore,
+            cashedOutAt: cashed,
+            payout,
+            won: cashed !== null,
+            timestamp: Date.now(),
+          };
+          setMyHistory((h) => [entry, ...h].slice(0, 50));
         }
+      } else if (s.phase === "betting") {
+        setMultiplier(1);
+        lastTickSecondRef.current = -1;
       }
+    }
 
-      // Detect my cashout (null → value)
-      if (myCashedOut !== null && cashedBefore === null && me && me.bet !== null) {
-        setBalance((b) => b + me.bet! * myCashedOut);
-        ca.cashOutDing();
-      }
-      cashedOutAtRef.current = myCashedOut;
+    // I just cashed out — credit winnings + ding
+    if (
+      myCashedOut !== null &&
+      cashedBefore === null &&
+      me &&
+      me.bet !== null
+    ) {
+      setBalance((b) => b + me.bet! * myCashedOut);
+      ca.cashOutDing();
+    }
+    cashedOutAtRef.current = myCashedOut;
 
-      // If the server drops my bet WHILE we're still in the betting phase
-      // (I cancelled, or server rejected), refund the debited amount.
-      // Important: only refund when prev and current are both "betting";
-      // on the crashed→betting transition the server naturally clears all
-      // bets for the new round, and those were already lost — refunding
-      // there was the bug that made losses invisible.
-      if (
-        prevPhase === "betting" &&
-        s.phase === "betting" &&
-        myselfBefore !== null &&
-        myBet === null
-      ) {
-        setBalance((b) => b + myselfBefore);
-      }
-    },
-    [],
-  );
+    // Only refund when prev+current are both betting — real cancellation,
+    // not the normal crashed→betting bet reset.
+    if (
+      prevPhase === "betting" &&
+      s.phase === "betting" &&
+      myselfBefore !== null &&
+      myBet === null
+    ) {
+      setBalance((b) => b + myselfBefore);
+    }
+  }, []);
 
-  // Keep playerIdRef in sync so the interpolation loop & message handlers see it
   useEffect(() => {
     playerIdRef.current = playerId;
   }, [playerId]);
 
-  // WebSocket connection
   useEffect(() => {
     if (typeof window === "undefined") return;
     let ws: WebSocket | null = null;
@@ -193,14 +287,21 @@ export function useMultiplayerGame() {
       wsRef.current = ws;
       ws.onopen = () => {
         setConnected(true);
+        // push our current name to the server as soon as we're connected
+        const name = playerName;
+        if (name && ws && ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({ type: "setName", name }));
+          } catch {
+            /* ignore */
+          }
+        }
       };
       ws.onclose = () => {
         setConnected(false);
         wsRef.current = null;
         audioRef.current.stopEngine();
-        if (!closed) {
-          reconnectTimer = setTimeout(connect, 1500);
-        }
+        if (!closed) reconnectTimer = setTimeout(connect, 1500);
       };
       ws.onerror = () => {
         try {
@@ -239,21 +340,15 @@ export function useMultiplayerGame() {
         /* ignore */
       }
     };
-    // applyServerState is stable (no deps) — intentionally not in deps so we
-    // don't reconnect every render
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // RAF loop for smooth multiplier + countdown interpolation
   useEffect(() => {
     let raf = 0;
     let cancelled = false;
     const frame = () => {
       if (cancelled) return;
       const anchor = phaseAnchorRef.current;
-      const localElapsed =
-        anchor.serverElapsed + (performance.now() - anchor.localStart - anchor.serverElapsed);
-      // simpler: now - localStart approximates elapsed since phase began
       const elapsed = performance.now() - anchor.localStart;
       if (anchor.phase === "flying") {
         const m = multiplierAt(elapsed);
@@ -278,8 +373,6 @@ export function useMultiplayerGame() {
         const left = Math.max(0, CRASH_HOLD_MS - elapsed);
         setPhaseMsLeft(left);
       }
-      // suppress unused-var warning on localElapsed (kept for future tuning)
-      void localElapsed;
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -306,7 +399,8 @@ export function useMultiplayerGame() {
   const placeBet = useCallback(() => {
     if (phase !== "betting") return;
     if (activeBet !== null) return;
-    if (!Number.isFinite(betInput) || betInput <= 0 || betInput > balance) return;
+    if (!Number.isFinite(betInput) || betInput <= 0 || betInput > balance)
+      return;
     setBalance((b) => b - betInput);
     send({ type: "placeBet", amount: Math.floor(betInput) });
   }, [phase, activeBet, betInput, balance, send]);
@@ -319,7 +413,6 @@ export function useMultiplayerGame() {
 
   const cancelBet = useCallback(() => {
     if (phase !== "betting" || activeBet === null) return;
-    // optimistic refund — applyServerState will reconcile if server had other ideas
     send({ type: "cancelBet" });
   }, [phase, activeBet, send]);
 
@@ -334,12 +427,11 @@ export function useMultiplayerGame() {
   );
 
   return {
-    // connection
     connected,
     playerId,
     playerName,
     renamePlayer,
-    // round state
+    walletAddress,
     phase,
     multiplier,
     elapsedMs,
@@ -347,17 +439,15 @@ export function useMultiplayerGame() {
     crashPoint,
     history,
     players,
-    // player state
     balance,
     betInput,
     setBetInput,
     activeBet,
     cashedOutAt,
-    // actions
+    myHistory,
     placeBet,
     cashOut,
     cancelBet,
-    // audio
     muted: audio.muted,
     setMuted: audio.setMuted,
   };
