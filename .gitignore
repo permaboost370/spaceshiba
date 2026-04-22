@@ -8,3 +8,6 @@ next-env.d.ts
 
 # reference images used during development, not part of the app
 test.jpg
+
+.vercel
+.env*.local
