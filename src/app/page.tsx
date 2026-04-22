@@ -1,8 +1,10 @@
 "use client";
+import { useState } from "react";
 import { useMultiplayerGame } from "@/lib/useMultiplayerGame";
 import { CrashGraph } from "@/components/CrashGraph";
 import { BetPanel } from "@/components/BetPanel";
-import { HistoryStrip } from "@/components/HistoryStrip";
+import { HistoryButton } from "@/components/HistoryButton";
+import { HistoryModal } from "@/components/HistoryModal";
 import { MuteButton } from "@/components/MuteButton";
 import { BackgroundFX } from "@/components/BackgroundFX";
 import { PlayersList } from "@/components/PlayersList";
@@ -11,6 +13,7 @@ import { NameTag } from "@/components/NameTag";
 
 export default function Home() {
   const g = useMultiplayerGame();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const statusPill = (
     <div
@@ -34,7 +37,7 @@ export default function Home() {
     >
       <BackgroundFX phase={g.phase} multiplier={g.multiplier} />
 
-      <header className="relative z-20 flex items-center gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
+      <header className="relative z-20 flex items-center gap-2 px-3 pt-2 sm:px-4 sm:pt-3">
         <div className="shrink-0 flex items-center gap-2 px-2 py-1 border-2 border-ink bg-surface">
           <AstroidMark size={20} color="var(--color-flame)" />
           <span
@@ -50,8 +53,12 @@ export default function Home() {
             // ASTROID
           </span>
         </div>
-        <div className="flex-1 min-w-0">
-          <HistoryStrip history={g.history} />
+        <div className="flex-1 min-w-0 flex justify-start">
+          <HistoryButton
+            latest={g.history[0]?.crashPoint ?? null}
+            count={g.history.length}
+            onClick={() => setHistoryOpen(true)}
+          />
         </div>
         {/* Live indicator + mute — shown in header on mobile; on desktop they
             live in the right column above the pilots list. */}
@@ -95,11 +102,17 @@ export default function Home() {
       </div>
 
       {/* Mobile-only pilots drawer above bet panel */}
-      <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2 max-h-[22vh]">
+      <div className="md:hidden relative z-10 px-3 sm:px-4 pt-2 h-[14vh] min-h-[88px]">
         <PlayersList players={g.players} phase={g.phase} selfId={g.playerId} />
       </div>
 
-      <section className="relative z-10 px-3 sm:px-4 pb-4 sm:pb-6 pt-3">
+      <HistoryModal
+        history={g.history}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
+
+      <section className="relative z-10 px-3 sm:px-4 pb-3 sm:pb-4 pt-2">
         <BetPanel
           phase={g.phase}
           balance={g.balance}

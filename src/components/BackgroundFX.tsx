@@ -1,16 +1,16 @@
 "use client";
 import type { Phase } from "@/lib/useMultiplayerGame";
+import { Moon } from "./Moon";
 
-// Brutalist background: cream base + faint graph-paper grid + a single
-// bottom-glow that warms up with multiplier. No animated nebulas — the
-// digital-brutalism look wants stillness and information density, not swirl.
+// Brutalist background: cream graph-paper grid + hand-drawn moon in the
+// upper right + warm ambient glow that intensifies with the multiplier.
 type Props = {
   phase: Phase;
   multiplier: number;
 };
 
 export function BackgroundFX({ phase, multiplier }: Props) {
-  const glowOpacity = Math.min(0.35, 0.08 + (multiplier - 1) * 0.025);
+  const glowOpacity = Math.min(0.4, 0.1 + (multiplier - 1) * 0.025);
   const glowSize = 45 + Math.min(40, (multiplier - 1) * 4);
   const crashFlash = phase === "crashed";
 
@@ -19,12 +19,25 @@ export function BackgroundFX({ phase, multiplier }: Props) {
       className="absolute inset-0 overflow-hidden pointer-events-none graph-paper"
       aria-hidden
     >
+      {/* Moon — parked in the upper right, partially off-screen so it feels
+          like it's peeking into frame. */}
+      <div
+        className="absolute"
+        style={{
+          top: "clamp(-4vmin, -3vmin, 0vmin)",
+          right: "clamp(-6vmin, -4vmin, 0vmin)",
+          opacity: 0.9,
+        }}
+      >
+        <Moon size="clamp(180px, 34vmin, 460px)" />
+      </div>
+
       {/* Warm ambient glow that heats up with multiplier */}
       <div
         className="absolute"
         style={{
           left: "50%",
-          top: "70%",
+          top: "72%",
           width: `${glowSize}vmin`,
           height: `${glowSize}vmin`,
           transform: "translate(-50%, -50%)",
@@ -33,13 +46,12 @@ export function BackgroundFX({ phase, multiplier }: Props) {
         }}
       />
 
-      {/* Crash red flash */}
       {crashFlash && (
         <div
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(circle at 50% 45%, rgba(226, 20, 20, 0.35) 0%, rgba(226, 20, 20, 0.1) 40%, transparent 75%)",
+              "radial-gradient(circle at 50% 45%, rgba(255, 85, 85, 0.32) 0%, rgba(255, 85, 85, 0.1) 40%, transparent 75%)",
             animation: "crashflash 0.5s ease-out forwards",
           }}
         />

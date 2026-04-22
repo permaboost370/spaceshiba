@@ -9,8 +9,8 @@ import { Flame } from "./Flame";
 // Starting point is the shiba's crash position (0,0); the curve traces a full
 // astroid centered to the right and above, so the shiba ricochets through all
 // four cusps before returning and fading out.
-const ASTROID_STEPS = 48;
-const ASTROID_RADIUS = 110;
+const ASTROID_STEPS = 64;
+const ASTROID_RADIUS = 140;
 const ASTROID_X: number[] = [];
 const ASTROID_Y: number[] = [];
 for (let i = 0; i <= ASTROID_STEPS; i++) {
@@ -371,7 +371,7 @@ function ShibaPilot({
       style={{
         left: `${left}%`,
         top: `${top}%`,
-        width: "clamp(48px, 8vw, 92px)",
+        width: "clamp(34px, 5.5vw, 64px)",
         aspectRatio: SHIBA_ASPECT,
         transform: "translate(-50%, -88%)",
         zIndex: 30,
@@ -389,7 +389,7 @@ function ShibaPilot({
             opacity: [1, 0.95, 0.7, 0.35, 0],
             scale: [1, 0.95, 0.78, 0.5, 0.22],
           }}
-          transition={{ duration: 1.9, ease: [0.22, 0.6, 0.3, 1] }}
+          transition={{ duration: 3.2, ease: "linear" }}
         >
           <img
             src="/shiba.png"

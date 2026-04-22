@@ -28,16 +28,16 @@ export function BetPanel(p: Props) {
       : 0;
 
   return (
-    <div className="w-full max-w-md mx-auto space-y-2.5 sm:space-y-3">
+    <div className="w-full max-w-md mx-auto space-y-2">
       <div
-        className="flex justify-between items-baseline text-lg sm:text-xl md:text-2xl uppercase tracking-widest"
+        className="flex justify-between items-baseline text-sm sm:text-base md:text-lg uppercase tracking-widest"
         style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       >
         <span className="text-ink/60">balance</span>
         <span className="text-ink tabular-nums">§ {p.balance.toFixed(2)}</span>
       </div>
 
-      <div className="flex gap-1.5 sm:gap-2 items-stretch">
+      <div className="flex gap-1.5 items-stretch">
         <input
           type="number"
           inputMode="numeric"
@@ -46,7 +46,7 @@ export function BetPanel(p: Props) {
             p.setBetInput(Math.max(0, Math.floor(Number(e.target.value) || 0)))
           }
           disabled={p.activeBet !== null}
-          className="flex-1 min-w-0 bg-surface border-2 border-ink px-3 sm:px-4 py-2.5 sm:py-3 text-xl sm:text-2xl text-ink placeholder-ink/40 focus:outline-none disabled:opacity-50 tabular-nums"
+          className="flex-1 min-w-0 bg-surface border-2 border-ink px-3 py-1.5 sm:py-2 text-base sm:text-lg text-ink placeholder-ink/40 focus:outline-none disabled:opacity-50 tabular-nums"
           style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
           placeholder="bet"
           min={0}
@@ -56,7 +56,7 @@ export function BetPanel(p: Props) {
             key={v}
             onClick={() => p.setBetInput(v)}
             disabled={p.activeBet !== null}
-            className="px-2.5 sm:px-3 bg-surface border-2 border-ink text-lg sm:text-xl text-ink hover:bg-ink hover:text-bg disabled:opacity-40 transition-colors tabular-nums"
+            className="px-2 sm:px-2.5 bg-surface border-2 border-ink text-sm sm:text-base text-ink hover:bg-ink hover:text-bg disabled:opacity-40 transition-colors tabular-nums"
             style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
           >
             {v}
@@ -64,7 +64,7 @@ export function BetPanel(p: Props) {
         ))}
       </div>
 
-      <div className="relative h-16 sm:h-20">
+      <div className="relative h-12 sm:h-14">
         <AnimatePresence mode="wait">
           {!p.connected ? (
             <motion.div
@@ -72,7 +72,7 @@ export function BetPanel(p: Props) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/70 text-xl sm:text-2xl uppercase tracking-widest"
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/70 text-base sm:text-lg uppercase tracking-widest"
               style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
             >
               connecting…
@@ -80,12 +80,12 @@ export function BetPanel(p: Props) {
           ) : canCashOut ? (
             <motion.button
               key="cashout"
-              initial={{ y: 10, opacity: 0 }}
+              initial={{ y: 8, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              exit={{ y: -10, opacity: 0 }}
-              transition={{ duration: 0.12 }}
+              exit={{ y: -8, opacity: 0 }}
+              transition={{ duration: 0.1 }}
               onClick={p.cashOut}
-              className="absolute inset-0 bg-flame text-ink border-2 border-ink shadow-[4px_4px_0_#0a0a0a] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#0a0a0a] transition-all text-2xl sm:text-3xl md:text-4xl uppercase tracking-wider tabular-nums"
+              className="absolute inset-0 bg-flame text-ink border-2 border-ink shadow-[4px_4px_0_#0a0a0a] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#0a0a0a] transition-all text-base sm:text-xl md:text-2xl uppercase tracking-wider tabular-nums"
               style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
             >
               cash out § {potentialWin.toFixed(2)}
@@ -93,17 +93,17 @@ export function BetPanel(p: Props) {
           ) : p.cashedOutAt !== null ? (
             <motion.div
               key="cashedout"
-              initial={{ y: 10, opacity: 0 }}
+              initial={{ y: 8, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.14 }}
+              transition={{ duration: 0.12 }}
               className="absolute inset-0 flex flex-col items-center justify-center bg-surface border-2 border-flame text-flame"
               style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
             >
-              <div className="text-xl sm:text-2xl md:text-3xl uppercase tracking-wider tabular-nums">
+              <div className="text-base sm:text-lg md:text-xl uppercase tracking-wider tabular-nums leading-tight">
                 out @ {p.cashedOutAt.toFixed(2)}x
               </div>
               <div
-                className="text-sm sm:text-base text-ink/80 -mt-1 uppercase tracking-widest tabular-nums"
+                className="text-xs sm:text-sm text-ink/80 uppercase tracking-widest tabular-nums leading-tight"
                 style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
               >
                 won § {winAmount.toFixed(2)}
@@ -116,7 +116,7 @@ export function BetPanel(p: Props) {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={p.cancelBet}
-              className="absolute inset-0 border-2 border-ink bg-surface text-ink text-lg sm:text-xl hover:bg-ink hover:text-bg transition-colors uppercase tracking-widest"
+              className="absolute inset-0 border-2 border-ink bg-surface text-ink text-sm sm:text-base hover:bg-ink hover:text-bg transition-colors uppercase tracking-widest"
               style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
             >
               bet § {p.activeBet} — cancel ({Math.ceil(p.phaseMsLeft / 1000)}s)
@@ -129,7 +129,7 @@ export function BetPanel(p: Props) {
               exit={{ opacity: 0 }}
               onClick={p.placeBet}
               disabled={p.betInput <= 0 || p.betInput > p.balance}
-              className="absolute inset-0 bg-ink text-bg border-2 border-ink shadow-[4px_4px_0_#ff4a00] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#ff4a00] transition-all text-2xl sm:text-3xl md:text-4xl uppercase tracking-wider disabled:opacity-40 disabled:shadow-none"
+              className="absolute inset-0 bg-ink text-bg border-2 border-ink shadow-[4px_4px_0_#ff4a00] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#ff4a00] transition-all text-base sm:text-xl md:text-2xl uppercase tracking-wider disabled:opacity-40 disabled:shadow-none"
               style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
             >
               place bet · {Math.ceil(p.phaseMsLeft / 1000)}s
@@ -140,12 +140,12 @@ export function BetPanel(p: Props) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/60 text-lg sm:text-xl uppercase tracking-widest"
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/60 text-sm sm:text-base uppercase tracking-widest"
               style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
             >
               {p.phase === "flying"
                 ? "// spectating"
-                : "// next round incoming"}
+                : "// next round"}
             </motion.div>
           )}
         </AnimatePresence>
