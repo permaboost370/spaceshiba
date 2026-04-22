@@ -17,7 +17,13 @@ const hand = Space_Mono({
   variable: "--font-hand",
 });
 
+// Absolute base for og:image / twitter:image. Override with
+// NEXT_PUBLIC_SITE_URL in prod so X unfurls point at the real host.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "SPACESHIBA | ASTROID",
   description: "Cash out before the dog goes too far.",
   openGraph: {

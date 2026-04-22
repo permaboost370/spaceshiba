@@ -58,6 +58,10 @@ const WS_URL =
     : "ws://localhost:3101");
 
 const DEFAULT_BALANCE = 1000;
+// Lowest balance we'll let a broke player sit at before refilling them.
+// Anything below this with no active bet gets topped back up to
+// DEFAULT_BALANCE on the next betting phase.
+const REFILL_THRESHOLD = 1;
 
 // localStorage key helpers — scoped to wallet address when connected,
 // or to "anon" for disconnected users
@@ -87,6 +91,12 @@ export function useMultiplayerGame() {
   const [balance, setBalance] = useState<number>(DEFAULT_BALANCE);
   const [betInput, setBetInput] = useState<number>(100);
   const [myHistory, setMyHistory] = useState<MyRoundResult[]>([]);
+  const [lastWin, setLastWin] = useState<{
+    multiplier: number;
+    payout: number;
+    bet: number;
+    id: number;
+  } | null>(null);
 
   const phaseAnchorRef = useRef<{
     phase: Phase;
@@ -184,6 +194,15 @@ export function useMultiplayerGame() {
     }
   }, [playerName]);
 
+  // Broke-player auto-refill. Chips are play money, so if the user busts
+  // we top them back up to DEFAULT_BALANCE at the start of the next betting
+  // phase. Gated on "no active bet" so we never refill mid-round.
+  useEffect(() => {
+    if (phase !== "betting") return;
+    if (activeBetRef.current !== null) return;
+    if (balance < REFILL_THRESHOLD) setBalance(DEFAULT_BALANCE);
+  }, [phase, balance]);
+
   const applyServerState = useCallback((s: ServerState) => {
     const prevPhase = phaseAtAnchorRef.current;
     const myselfBefore = activeBetRef.current;
@@ -248,15 +267,22 @@ export function useMultiplayerGame() {
       }
     }
 
-    // I just cashed out — credit winnings + ding
+    // I just cashed out — credit winnings + ding + surface a share toast
     if (
       myCashedOut !== null &&
       cashedBefore === null &&
       me &&
       me.bet !== null
     ) {
-      setBalance((b) => b + me.bet! * myCashedOut);
+      const payout = me.bet * myCashedOut;
+      setBalance((b) => b + payout);
       ca.cashOutDing();
+      setLastWin({
+        multiplier: myCashedOut,
+        payout,
+        bet: me.bet,
+        id: Date.now(),
+      });
     }
     cashedOutAtRef.current = myCashedOut;
 
@@ -426,6 +452,8 @@ export function useMultiplayerGame() {
     [send],
   );
 
+  const dismissLastWin = useCallback(() => setLastWin(null), []);
+
   return {
     connected,
     playerId,
@@ -450,5 +478,7 @@ export function useMultiplayerGame() {
     cancelBet,
     muted: audio.muted,
     setMuted: audio.setMuted,
+    lastWin,
+    dismissLastWin,
   };
 }
