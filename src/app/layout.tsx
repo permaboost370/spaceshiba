@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import { Caveat_Brush, Caveat } from "next/font/google";
+import { Orbitron, VT323 } from "next/font/google";
 import "./globals.css";
 
-const display = Caveat_Brush({
-  weight: "400",
+const display = Orbitron({
+  weight: ["700", "900"],
   subsets: ["latin"],
   variable: "--font-display",
 });
 
-const hand = Caveat({
+const hand = VT323({
+  weight: "400",
   subsets: ["latin"],
   variable: "--font-hand",
 });
