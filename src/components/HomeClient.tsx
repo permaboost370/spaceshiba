@@ -14,6 +14,7 @@ import { WalletButton } from "@/components/WalletButton";
 import { ProfileModal } from "@/components/ProfileModal";
 import { MobileMenu, HamburgerButton } from "@/components/MobileMenu";
 import { ShareToast } from "@/components/ShareToast";
+import { DisclaimerGate } from "@/components/DisclaimerGate";
 
 export function HomeClient() {
   const g = useMultiplayerGame();
@@ -149,8 +150,14 @@ export function HomeClient() {
           cashOut={g.cashOut}
           cancelBet={g.cancelBet}
           connected={g.connected}
+          walletAddress={g.walletAddress}
+          authStatus={g.authStatus}
+          authError={g.authError}
+          retryAuth={g.retryAuth}
         />
       </section>
+
+      <DisclaimerGate />
     </main>
   );
 }

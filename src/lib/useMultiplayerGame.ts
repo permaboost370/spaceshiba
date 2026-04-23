@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
 import { multiplierAt } from "./crash";
 import { useAudio } from "./useAudio";
 
@@ -72,13 +73,21 @@ const balanceKey = (addr: string | null) =>
 const historyKey = (addr: string | null) =>
   `spaceshiba.myhistory.${addr ?? "anon"}`;
 
+export type AuthStatus =
+  | "idle"
+  | "signing"
+  | "authenticated"
+  | "error";
+
 export function useMultiplayerGame() {
-  const { publicKey } = useWallet();
+  const { publicKey, signMessage } = useWallet();
   const walletAddress = publicKey?.toBase58() ?? null;
 
   const [connected, setConnected] = useState(false);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState<string>("");
+  const [authStatus, setAuthStatus] = useState<AuthStatus>("idle");
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const [phase, setPhase] = useState<Phase>("betting");
   const [multiplier, setMultiplier] = useState(1);
@@ -115,6 +124,10 @@ export function useMultiplayerGame() {
   const playerIdRef = useRef<string | null>(null);
   const walletAddressRef = useRef<string | null>(null);
   walletAddressRef.current = walletAddress;
+  const signMessageRef = useRef<typeof signMessage>(signMessage);
+  signMessageRef.current = signMessage;
+  const authStatusRef = useRef<AuthStatus>(authStatus);
+  authStatusRef.current = authStatus;
 
   const audio = useAudio();
   const audioRef = useRef(audio);
@@ -302,6 +315,48 @@ export function useMultiplayerGame() {
     playerIdRef.current = playerId;
   }, [playerId]);
 
+  // Reset auth state + force a fresh server session when the connected
+  // wallet changes (including disconnect). The reconnect timer in ws.onclose
+  // reopens the socket; the effect below will request_auth again.
+  const prevWalletRef = useRef<string | null>(walletAddress);
+  useEffect(() => {
+    if (prevWalletRef.current === walletAddress) return;
+    const prev = prevWalletRef.current;
+    prevWalletRef.current = walletAddress;
+    setAuthStatus("idle");
+    setAuthError(null);
+    if (prev !== null) {
+      try {
+        wsRef.current?.close();
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [walletAddress]);
+
+  // Kick off sign-in when wallet is connected and the socket is open.
+  // Only triggers from "idle" — error/retry is user-driven via retryAuth()
+  // to avoid looping the wallet's signMessage prompt after rejection.
+  useEffect(() => {
+    if (!walletAddress) return;
+    if (!connected) return;
+    if (authStatus !== "idle") return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(
+        JSON.stringify({ type: "request_auth", address: walletAddress }),
+      );
+    } catch {
+      /* ignore */
+    }
+  }, [walletAddress, connected, authStatus]);
+
+  const retryAuth = useCallback(() => {
+    setAuthStatus("idle");
+    setAuthError(null);
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     let ws: WebSocket | null = null;
@@ -336,7 +391,7 @@ export function useMultiplayerGame() {
           /* ignore */
         }
       };
-      ws.onmessage = (evt) => {
+      ws.onmessage = async (evt) => {
         let msg: Record<string, unknown> = {};
         try {
           msg = JSON.parse(evt.data);
@@ -353,6 +408,41 @@ export function useMultiplayerGame() {
           }
         } else if (msg.type === "state") {
           applyServerState(msg as unknown as ServerState);
+        } else if (msg.type === "auth_challenge") {
+          if (typeof msg.message !== "string") return;
+          const sign = signMessageRef.current;
+          const addr = walletAddressRef.current;
+          if (!sign || !addr) {
+            setAuthStatus("error");
+            setAuthError("wallet_cannot_sign");
+            return;
+          }
+          try {
+            setAuthStatus("signing");
+            setAuthError(null);
+            const sigBytes = await sign(new TextEncoder().encode(msg.message));
+            const sigB58 = bs58.encode(sigBytes);
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: "auth",
+                  address: addr,
+                  signature: sigB58,
+                }),
+              );
+            }
+          } catch {
+            setAuthStatus("error");
+            setAuthError("user_rejected");
+          }
+        } else if (msg.type === "auth_ok") {
+          setAuthStatus("authenticated");
+          setAuthError(null);
+        } else if (msg.type === "auth_error") {
+          setAuthStatus("error");
+          setAuthError(
+            typeof msg.reason === "string" ? msg.reason : "auth_failed",
+          );
         }
       };
     };
@@ -422,25 +512,31 @@ export function useMultiplayerGame() {
   const activeBet = me?.bet ?? null;
   const cashedOutAt = me?.cashedOutAt ?? null;
 
+  const isAuthed = authStatus === "authenticated";
+
   const placeBet = useCallback(() => {
+    if (!isAuthed) return;
     if (phase !== "betting") return;
     if (activeBet !== null) return;
     if (!Number.isFinite(betInput) || betInput <= 0 || betInput > balance)
       return;
+    if (betInput > 500) return;
     setBalance((b) => b - betInput);
     send({ type: "placeBet", amount: Math.floor(betInput) });
-  }, [phase, activeBet, betInput, balance, send]);
+  }, [isAuthed, phase, activeBet, betInput, balance, send]);
 
   const cashOut = useCallback(() => {
+    if (!isAuthed) return;
     if (phase !== "flying") return;
     if (activeBet === null || cashedOutAt !== null) return;
     send({ type: "cashOut" });
-  }, [phase, activeBet, cashedOutAt, send]);
+  }, [isAuthed, phase, activeBet, cashedOutAt, send]);
 
   const cancelBet = useCallback(() => {
+    if (!isAuthed) return;
     if (phase !== "betting" || activeBet === null) return;
     send({ type: "cancelBet" });
-  }, [phase, activeBet, send]);
+  }, [isAuthed, phase, activeBet, send]);
 
   const renamePlayer = useCallback(
     (name: string) => {
@@ -456,6 +552,9 @@ export function useMultiplayerGame() {
 
   return {
     connected,
+    authStatus,
+    authError,
+    retryAuth,
     playerId,
     playerName,
     renamePlayer,

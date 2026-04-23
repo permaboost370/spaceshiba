@@ -1,6 +1,6 @@
 "use client";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Phase } from "@/lib/useMultiplayerGame";
+import type { AuthStatus, Phase } from "@/lib/useMultiplayerGame";
 
 type Props = {
   phase: Phase;
@@ -15,7 +15,13 @@ type Props = {
   cashOut: () => void;
   cancelBet: () => void;
   connected: boolean;
+  walletAddress: string | null;
+  authStatus: AuthStatus;
+  authError: string | null;
+  retryAuth: () => void;
 };
+
+const MAX_BET = 500;
 
 export function BetPanel(p: Props) {
   const canCashOut =
@@ -43,15 +49,21 @@ export function BetPanel(p: Props) {
           inputMode="numeric"
           value={p.betInput}
           onChange={(e) =>
-            p.setBetInput(Math.max(0, Math.floor(Number(e.target.value) || 0)))
+            p.setBetInput(
+              Math.min(
+                MAX_BET,
+                Math.max(0, Math.floor(Number(e.target.value) || 0)),
+              ),
+            )
           }
           disabled={p.activeBet !== null}
           className="flex-1 min-w-0 bg-surface border-2 border-ink px-3 py-1.5 sm:py-2 text-base sm:text-lg text-ink placeholder-ink/40 focus:outline-none disabled:opacity-50 tabular-nums"
           style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-          placeholder="bet"
+          placeholder={`bet (max ${MAX_BET})`}
           min={0}
+          max={MAX_BET}
         />
-        {[25, 100, 250].map((v) => (
+        {[25, 100, 500].map((v) => (
           <button
             key={v}
             onClick={() => p.setBetInput(v)}
@@ -76,6 +88,52 @@ export function BetPanel(p: Props) {
               style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
             >
               connecting…
+            </motion.div>
+          ) : !p.walletAddress ? (
+            <motion.div
+              key="nowallet"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/70 text-sm sm:text-base uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+            >
+              connect wallet to play
+            </motion.div>
+          ) : p.authStatus === "signing" ? (
+            <motion.div
+              key="signing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/70 text-sm sm:text-base uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+            >
+              check wallet to sign…
+            </motion.div>
+          ) : p.authStatus === "error" ? (
+            <motion.button
+              key="autherror"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={p.retryAuth}
+              className="absolute inset-0 border-2 border-danger bg-surface text-danger text-sm sm:text-base hover:bg-danger hover:text-bg transition-colors uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+              title={p.authError ?? "sign-in failed"}
+            >
+              sign-in failed — retry
+            </motion.button>
+          ) : p.authStatus !== "authenticated" ? (
+            <motion.div
+              key="authidle"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex items-center justify-center border-2 border-ink bg-surface text-ink/70 text-sm sm:text-base uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+            >
+              preparing sign-in…
             </motion.div>
           ) : canCashOut ? (
             <motion.button
