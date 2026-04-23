@@ -1,23 +1,28 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { RoundHistory } from "@/lib/useMultiplayerGame";
-import { crashPointFromHash, sha256 } from "@/lib/crash";
+import { crashPointFromHash, sha256, sha256OfHex } from "@/lib/crash";
 
 type VerifyResult = {
   computedHash: string;
   hashMatches: boolean;
   computedCrashPoint: number;
   crashMatches: boolean;
+  chainNext: string;
+  chainExpected: string | null;
+  chainLinkOk: boolean | null;
 };
 
 export function HistoryModal({
   history,
   open,
   onClose,
+  chainHead,
 }: {
   history: RoundHistory[];
   open: boolean;
   onClose: () => void;
+  chainHead: string | null;
 }) {
   const [expandedNonce, setExpandedNonce] = useState<number | null>(null);
 
@@ -63,6 +68,19 @@ export function HistoryModal({
             ×
           </button>
         </div>
+        {chainHead && (
+          <div
+            className="px-3 py-1.5 border-b-2 border-ink/10 text-[10px]"
+            title="Genesis commitment for the server-seed chain. Every revealed seed links back to this hash — open any round to check."
+          >
+            <span className="text-ink/50 uppercase tracking-[0.2em]">
+              chain head
+            </span>{" "}
+            <span className="text-ink/70 tabular-nums break-all">
+              {chainHead.slice(0, 24)}…
+            </span>
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto no-scrollbar">
           {history.length === 0 ? (
             <div className="p-4 text-ink/50 text-sm uppercase tracking-widest">
@@ -70,7 +88,7 @@ export function HistoryModal({
             </div>
           ) : (
             <ul className="divide-y-2 divide-ink/10">
-              {history.map((r) => {
+              {history.map((r, idx) => {
                 const color =
                   r.crashPoint < 1.5
                     ? "text-danger"
@@ -78,6 +96,13 @@ export function HistoryModal({
                       ? "text-ink"
                       : "text-flame";
                 const isExpanded = expandedNonce === r.nonce;
+                // history is newest-first, so the "previous round" is
+                // the entry AFTER this one. If there isn't one in view,
+                // we fall back to the chain head (only valid for the
+                // very first round; informational otherwise).
+                const prevSeed =
+                  history[idx + 1]?.serverSeed ??
+                  (r.nonce === 1 ? chainHead ?? null : null);
                 return (
                   <li key={r.nonce}>
                     <button
@@ -112,7 +137,7 @@ export function HistoryModal({
                         {r.crashPoint.toFixed(2)}x
                       </div>
                     </button>
-                    {isExpanded && <VerifyPanel r={r} />}
+                    {isExpanded && <VerifyPanel r={r} prevSeed={prevSeed} />}
                   </li>
                 );
               })}
@@ -124,7 +149,13 @@ export function HistoryModal({
   );
 }
 
-function VerifyPanel({ r }: { r: RoundHistory }) {
+function VerifyPanel({
+  r,
+  prevSeed,
+}: {
+  r: RoundHistory;
+  prevSeed: string | null;
+}) {
   const [result, setResult] = useState<VerifyResult | null>(null);
   const [verifying, setVerifying] = useState(false);
 
@@ -137,6 +168,7 @@ function VerifyPanel({ r }: { r: RoundHistory }) {
           `${r.serverSeed}:${r.clientSeed}:${r.nonce}`,
         );
         const computedCrashPoint = crashPointFromHash(computedHash);
+        const chainNext = await sha256OfHex(r.serverSeed);
         if (cancelled) return;
         setResult({
           computedHash,
@@ -144,6 +176,9 @@ function VerifyPanel({ r }: { r: RoundHistory }) {
           computedCrashPoint,
           crashMatches:
             Math.abs(computedCrashPoint - r.crashPoint) < 0.01,
+          chainNext,
+          chainExpected: prevSeed,
+          chainLinkOk: prevSeed ? chainNext === prevSeed : null,
         });
       } catch {
         /* ignore */
@@ -154,7 +189,7 @@ function VerifyPanel({ r }: { r: RoundHistory }) {
     return () => {
       cancelled = true;
     };
-  }, [r]);
+  }, [r, prevSeed]);
 
   const Row = ({
     label,
@@ -208,6 +243,20 @@ function VerifyPanel({ r }: { r: RoundHistory }) {
             crash {result.computedCrashPoint.toFixed(2)}x ={" "}
             {result.crashMatches ? "✓ matches" : "✗ mismatch"}
           </div>
+          {result.chainLinkOk === null ? (
+            <div className="text-[11px] uppercase tracking-widest text-ink/50">
+              chain link: n/a (no prior round in view)
+            </div>
+          ) : (
+            <div
+              className={`text-[11px] uppercase tracking-widest ${
+                result.chainLinkOk ? "text-flame" : "text-danger"
+              }`}
+              title="sha256(this round's serverSeed) should equal the previous round's serverSeed (or the chain head for round #1)"
+            >
+              chain link: {result.chainLinkOk ? "✓ verified" : "✗ broken"}
+            </div>
+          )}
         </>
       ) : null}
     </div>

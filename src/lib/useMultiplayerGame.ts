@@ -68,6 +68,7 @@ type ServerState = {
   history: RoundHistory[];
   players: PlayerView[];
   serverTime: number;
+  chainHead?: string;
 };
 
 const WS_URL =
@@ -108,6 +109,7 @@ export function useMultiplayerGame() {
   const [crashPoint, setCrashPoint] = useState<number | null>(null);
   const [history, setHistory] = useState<RoundHistory[]>([]);
   const [players, setPlayers] = useState<PlayerView[]>([]);
+  const [chainHead, setChainHead] = useState<string | null>(null);
 
   // Balance is now server-authoritative: 0 until auth_ok + balance message
   // arrive from the server. UI units (whole tokens, 2 decimal precision).
@@ -232,6 +234,9 @@ export function useMultiplayerGame() {
     setCrashPoint(s.crashPoint);
     setHistory(s.history);
     setPlayers(s.players);
+    if (typeof s.chainHead === "string" && s.chainHead.length > 0) {
+      setChainHead(s.chainHead);
+    }
 
     const pid = playerIdRef.current;
     const me = pid ? s.players.find((p) => p.id === pid) : null;
@@ -684,5 +689,6 @@ export function useMultiplayerGame() {
     sendChat,
     withdraw,
     resyncDeposit,
+    chainHead,
   };
 }

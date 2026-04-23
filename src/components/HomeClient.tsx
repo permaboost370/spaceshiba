@@ -134,6 +134,7 @@ export function HomeClient() {
         history={g.history}
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
+        chainHead={g.chainHead}
       />
       <ProfileModal
         open={profileOpen}

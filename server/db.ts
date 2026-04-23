@@ -166,6 +166,50 @@ export async function markWithdrawalSent(
   );
 }
 
+// --- Seed chain ---
+
+export type SeedChainRow = {
+  terminal_seed: string;
+  head_hash: string;
+  chain_length: number;
+  last_nonce: number;
+};
+
+export async function getSeedChainRow(): Promise<SeedChainRow | null> {
+  const r = await pool.query<SeedChainRow>(
+    `SELECT terminal_seed, head_hash, chain_length, last_nonce
+       FROM seed_chain WHERE id = 1`,
+  );
+  return r.rows[0] ?? null;
+}
+
+export async function insertSeedChain(
+  terminalSeed: string,
+  headHash: string,
+  chainLength: number,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO seed_chain (id, terminal_seed, head_hash, chain_length, last_nonce)
+     VALUES (1, $1, $2, $3, 0)
+     ON CONFLICT (id) DO NOTHING`,
+    [terminalSeed, headHash, chainLength],
+  );
+}
+
+// Atomically increment last_nonce and return the new value. The returned
+// number is the nonce to use for the next round.
+export async function advanceSeedChainNonce(): Promise<number> {
+  const r = await pool.query<{ last_nonce: number }>(
+    `UPDATE seed_chain SET last_nonce = last_nonce + 1
+      WHERE id = 1
+      RETURNING last_nonce`,
+  );
+  if (r.rows.length === 0) {
+    throw new Error("seed_chain row missing — did migration run?");
+  }
+  return r.rows[0]!.last_nonce;
+}
+
 // Withdrawals that look stuck — pending/sent for longer than olderThanMs.
 // Returned to the reconciler so they can be resolved by checking on-chain
 // status or refunded if they never reached the network.

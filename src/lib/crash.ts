@@ -14,6 +14,26 @@ export async function sha256(msg: string): Promise<string> {
     .join("");
 }
 
+// sha256 where the input is a hex string interpreted as raw bytes. Used
+// for chain-link verification: chain[i] = sha256(bytes(chain[i+1])), so
+// to check the link we take the revealed seed's bytes and hash them,
+// then compare against the previous round's revealed seed.
+export async function sha256OfHex(hex: string): Promise<string> {
+  const clean = hex.trim();
+  if (clean.length % 2 !== 0) throw new Error("sha256OfHex: odd hex length");
+  const bytes = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+  }
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    bytes as unknown as BufferSource,
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function randomHex(bytes: number): string {
   const arr = new Uint8Array(bytes);
   crypto.getRandomValues(arr);

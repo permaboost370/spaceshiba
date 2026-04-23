@@ -47,3 +47,20 @@ CREATE TABLE IF NOT EXISTS watcher_cursor (
     CHECK (id = 1)
 );
 INSERT INTO watcher_cursor (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- Hash-chained server seeds. The chain is generated at first boot: a
+-- random 32-byte terminal seed is fixed, and chain[i] = sha256(chain[i+1])
+-- all the way down to chain[0] = head_hash, which is published. Each
+-- round uses chain[nonce] as its server seed, revealed after crash. A
+-- player can verify at any time that sha256(revealed_seed_N) equals the
+-- previous round's revealed seed (or head_hash for nonce=1), proving the
+-- server cannot have picked seeds after observing bets.
+CREATE TABLE IF NOT EXISTS seed_chain (
+    id             INT  PRIMARY KEY DEFAULT 1,
+    terminal_seed  TEXT NOT NULL,
+    head_hash      TEXT NOT NULL,
+    chain_length   INT  NOT NULL,
+    last_nonce     INT  NOT NULL DEFAULT 0,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (id = 1)
+);
