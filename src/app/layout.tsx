@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     description: "Cash out before the dog goes too far.",
     images: [
       {
-        url: "/bg.jpg",
+        url: "/bg2.jpg",
         alt: "SPACESHIBA | ASTROID",
       },
     ],
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "SPACESHIBA | ASTROID",
     description: "Cash out before the dog goes too far.",
-    images: ["/bg.jpg"],
+    images: ["/bg2.jpg"],
   },
 };
 
