@@ -196,22 +196,38 @@ function extractDeposit(
 
 type DepositNotify = (wallet: string, newBalanceRaw: bigint) => void;
 
-async function processSignature(
+// Thrown when the RPC hasn't propagated a signature yet. The watcher loop
+// catches this and retries on the next tick without advancing its cursor,
+// so the deposit isn't silently dropped.
+class TxNotReadyError extends Error {
+  constructor(public readonly sig: string) {
+    super(`tx not ready: ${sig}`);
+  }
+}
+
+export async function processSignature(
   sig: string,
   slot: number | null,
   notify: DepositNotify,
-): Promise<void> {
+): Promise<boolean> {
   const tx = await connection.getParsedTransaction(sig, {
     maxSupportedTransactionVersion: 0,
     commitment: "confirmed",
   });
-  if (!tx || !tx.meta || tx.meta.err) return;
+  if (!tx || !tx.meta) {
+    // Not found yet — RPC propagation lag. Raise so the watcher retries.
+    throw new TxNotReadyError(sig);
+  }
+  if (tx.meta.err) return false;
 
   const extracted = extractDeposit(
     tx.meta.preTokenBalances as TokenBalance[] | null,
     tx.meta.postTokenBalances as TokenBalance[] | null,
   );
-  if (!extracted) return;
+  if (!extracted) {
+    console.log(`[deposit] no extractable transfer in sig=${sig}`);
+    return false;
+  }
 
   const credited = await recordDepositAndCredit(
     sig,
@@ -225,8 +241,13 @@ async function processSignature(
     );
     const balance = await getBalance(extracted.sender);
     notify(extracted.sender, balance);
+  } else {
+    console.log(`[deposit] already credited sig=${sig}`);
   }
+  return credited;
 }
+
+export { TxNotReadyError };
 
 export async function startDepositWatcher(
   notify: DepositNotify,
@@ -273,11 +294,17 @@ export async function startDepositWatcher(
           cursor = info.signature;
           await setWatcherCursor(cursor);
         } catch (e) {
-          console.error(
-            `[deposit] processSignature ${info.signature} failed`,
-            e,
-          );
-          // Don't advance cursor on failure — we'll retry this sig next tick.
+          if (e instanceof TxNotReadyError) {
+            // RPC hasn't caught up yet — leave cursor where it is, retry
+            // next tick. Crucial: do NOT advance past an unread sig, or a
+            // real deposit will be silently skipped forever.
+            console.log(`[deposit] tx not yet visible, will retry ${e.sig}`);
+          } else {
+            console.error(
+              `[deposit] processSignature ${info.signature} failed`,
+              e,
+            );
+          }
           break;
         }
       }

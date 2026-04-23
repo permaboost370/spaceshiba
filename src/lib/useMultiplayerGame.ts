@@ -361,6 +361,17 @@ export function useMultiplayerGame() {
     [],
   );
 
+  const resyncDeposit = useCallback((sig: string) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (authStatusRef.current !== "authenticated") return;
+    try {
+      ws.send(JSON.stringify({ type: "resync_deposit", sig }));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const withdraw = useCallback(
     (amount: number): Promise<WithdrawResult> => {
       return new Promise((resolve) => {
@@ -663,5 +674,6 @@ export function useMultiplayerGame() {
     chat,
     sendChat,
     withdraw,
+    resyncDeposit,
   };
 }

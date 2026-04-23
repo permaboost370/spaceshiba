@@ -17,6 +17,7 @@ type Props = {
   history: MyRoundResult[];
   balance: number;
   withdraw: (amount: number) => Promise<WithdrawResult>;
+  resyncDeposit?: (sig: string) => void;
 };
 
 export function ProfileModal({
@@ -28,6 +29,7 @@ export function ProfileModal({
   history,
   balance,
   withdraw,
+  resyncDeposit,
 }: Props) {
   const { disconnect, publicKey, sendTransaction } = useWallet();
   const { connection } = useConnection();
@@ -94,6 +96,11 @@ export function ProfileModal({
         { signature, blockhash, lastValidBlockHeight },
         "confirmed",
       );
+      // Tell the server the signature so it can credit the in-game balance
+      // immediately, instead of waiting for the background deposit watcher
+      // to poll. The server-side handler is idempotent by signature, so
+      // this is safe even if the watcher also picks it up.
+      resyncDeposit?.(signature);
       setDepositStatus({ kind: "ok", signature });
       setDepositInput("");
     } catch (e) {

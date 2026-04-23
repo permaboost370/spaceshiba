@@ -144,6 +144,7 @@ export function HomeClient() {
         history={g.myHistory}
         balance={g.balance}
         withdraw={g.withdraw}
+        resyncDeposit={g.resyncDeposit}
       />
 
       <ShareToast lastWin={g.lastWin} onDismiss={g.dismissLastWin} />
