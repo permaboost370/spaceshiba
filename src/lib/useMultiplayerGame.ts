@@ -45,6 +45,12 @@ export type ChatMessage = {
   ts: number;
 };
 
+export type WithdrawResult = {
+  ok: boolean;
+  reason?: string;
+  signature?: string;
+};
+
 const MAX_CHAT_KEEP = 50;
 
 type ServerState = {
@@ -70,18 +76,11 @@ const WS_URL =
     ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:3101`
     : "ws://localhost:3101");
 
-const DEFAULT_BALANCE = 1000;
-// Lowest balance we'll let a broke player sit at before refilling them.
-// Anything below this with no active bet gets topped back up to
-// DEFAULT_BALANCE on the next betting phase.
-const REFILL_THRESHOLD = 1;
-
 // localStorage key helpers — scoped to wallet address when connected,
-// or to "anon" for disconnected users
+// or to "anon" for disconnected users. Balance is server-authoritative
+// now (DB-backed), so it's no longer keyed here.
 const nameKey = (addr: string | null) =>
   `spaceshiba.name.${addr ?? "anon"}`;
-const balanceKey = (addr: string | null) =>
-  `spaceshiba.balance.${addr ?? "anon"}`;
 const historyKey = (addr: string | null) =>
   `spaceshiba.myhistory.${addr ?? "anon"}`;
 
@@ -110,8 +109,11 @@ export function useMultiplayerGame() {
   const [history, setHistory] = useState<RoundHistory[]>([]);
   const [players, setPlayers] = useState<PlayerView[]>([]);
 
-  const [balance, setBalance] = useState<number>(DEFAULT_BALANCE);
+  // Balance is now server-authoritative: 0 until auth_ok + balance message
+  // arrive from the server. UI units (whole tokens, 2 decimal precision).
+  const [balance, setBalance] = useState<number>(0);
   const [betInput, setBetInput] = useState<number>(100);
+  const [insufficient, setInsufficient] = useState(false);
   const [myHistory, setMyHistory] = useState<MyRoundResult[]>([]);
   const [lastWin, setLastWin] = useState<{
     multiplier: number;
@@ -141,38 +143,36 @@ export function useMultiplayerGame() {
   signMessageRef.current = signMessage;
   const authStatusRef = useRef<AuthStatus>(authStatus);
   authStatusRef.current = authStatus;
+  // Map of in-flight withdrawal requestId → resolver. Populated when we
+  // send a withdraw, cleared by withdraw_result or timeout.
+  const pendingWithdrawsRef = useRef<
+    Map<string, (r: WithdrawResult) => void>
+  >(new Map());
 
   const audio = useAudio();
   const audioRef = useRef(audio);
   audioRef.current = audio;
 
-  // Load profile (name, balance, myHistory) when wallet address changes.
-  // Anonymous / pre-connect uses the "anon" bucket.
+  // Load profile (name + local-only myHistory) when the wallet changes.
+  // Balance is NOT loaded here — it comes from the server after auth.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const nk = nameKey(walletAddress);
-    const bk = balanceKey(walletAddress);
     const hk = historyKey(walletAddress);
 
     const storedName = window.localStorage.getItem(nk);
     if (storedName) {
       setPlayerName(storedName);
     } else if (walletAddress) {
-      // fresh wallet: default name = shortened address
       const defaultName = `${walletAddress.slice(0, 4)}…${walletAddress.slice(-4)}`;
       setPlayerName(defaultName);
     } else {
       setPlayerName("");
     }
 
-    const storedBalance = window.localStorage.getItem(bk);
-    if (storedBalance !== null) {
-      const n = Number(storedBalance);
-      if (Number.isFinite(n) && n >= 0) setBalance(n);
-      else setBalance(DEFAULT_BALANCE);
-    } else {
-      setBalance(DEFAULT_BALANCE);
-    }
+    // Fresh wallet → balance unknown until server tells us. Zero it out so
+    // the UI doesn't show the previous wallet's number.
+    setBalance(0);
 
     const storedHistory = window.localStorage.getItem(hk);
     if (storedHistory) {
@@ -194,12 +194,6 @@ export function useMultiplayerGame() {
     window.localStorage.setItem(nameKey(walletAddress), playerName);
   }, [playerName, walletAddress]);
 
-  // Persist balance
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(balanceKey(walletAddress), String(balance));
-  }, [balance, walletAddress]);
-
   // Persist personal history
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -219,15 +213,6 @@ export function useMultiplayerGame() {
       /* ignore */
     }
   }, [playerName]);
-
-  // Broke-player auto-refill. Chips are play money, so if the user busts
-  // we top them back up to DEFAULT_BALANCE at the start of the next betting
-  // phase. Gated on "no active bet" so we never refill mid-round.
-  useEffect(() => {
-    if (phase !== "betting") return;
-    if (activeBetRef.current !== null) return;
-    if (balance < REFILL_THRESHOLD) setBalance(DEFAULT_BALANCE);
-  }, [phase, balance]);
 
   const applyServerState = useCallback((s: ServerState) => {
     const prevPhase = phaseAtAnchorRef.current;
@@ -293,7 +278,9 @@ export function useMultiplayerGame() {
       }
     }
 
-    // I just cashed out — credit winnings + ding + surface a share toast
+    // I just cashed out — the ding + share toast are UI effects. The
+    // actual balance change comes in via a server `balance` message; we
+    // don't mutate balance locally anymore.
     if (
       myCashedOut !== null &&
       cashedBefore === null &&
@@ -301,7 +288,6 @@ export function useMultiplayerGame() {
       me.bet !== null
     ) {
       const payout = me.bet * myCashedOut;
-      setBalance((b) => b + payout);
       ca.cashOutDing();
       setLastWin({
         multiplier: myCashedOut,
@@ -311,17 +297,6 @@ export function useMultiplayerGame() {
       });
     }
     cashedOutAtRef.current = myCashedOut;
-
-    // Only refund when prev+current are both betting — real cancellation,
-    // not the normal crashed→betting bet reset.
-    if (
-      prevPhase === "betting" &&
-      s.phase === "betting" &&
-      myselfBefore !== null &&
-      myBet === null
-    ) {
-      setBalance((b) => b + myselfBefore);
-    }
   }, []);
 
   useEffect(() => {
@@ -382,6 +357,41 @@ export function useMultiplayerGame() {
       } catch {
         /* ignore */
       }
+    },
+    [],
+  );
+
+  const withdraw = useCallback(
+    (amount: number): Promise<WithdrawResult> => {
+      return new Promise((resolve) => {
+        if (authStatusRef.current !== "authenticated") {
+          resolve({ ok: false, reason: "not_authenticated" });
+          return;
+        }
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          resolve({ ok: false, reason: "not_connected" });
+          return;
+        }
+        const requestId =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `w-${Date.now()}-${Math.random()}`;
+        pendingWithdrawsRef.current.set(requestId, resolve);
+        // Generous timeout — RPC confirmation can take 30s+ under load.
+        setTimeout(() => {
+          if (pendingWithdrawsRef.current.has(requestId)) {
+            pendingWithdrawsRef.current.delete(requestId);
+            resolve({ ok: false, reason: "timeout" });
+          }
+        }, 120_000);
+        try {
+          ws.send(JSON.stringify({ type: "withdraw", amount, requestId }));
+        } catch {
+          pendingWithdrawsRef.current.delete(requestId);
+          resolve({ ok: false, reason: "send_failed" });
+        }
+      });
     },
     [],
   );
@@ -486,6 +496,30 @@ export function useMultiplayerGame() {
               ? next.slice(next.length - MAX_CHAT_KEEP)
               : next;
           });
+        } else if (msg.type === "balance") {
+          // Server is the source of truth for balance. UI is 2-decimal
+          // whole tokens; `raw` would be the smallest-unit bigint, but
+          // the UI never needs that scale.
+          if (typeof msg.ui === "number" && Number.isFinite(msg.ui)) {
+            setBalance(msg.ui);
+            setInsufficient(false);
+          }
+        } else if (msg.type === "insufficient_balance") {
+          setInsufficient(true);
+        } else if (msg.type === "withdraw_result") {
+          const rid =
+            typeof msg.requestId === "string" ? msg.requestId : null;
+          if (rid && pendingWithdrawsRef.current.has(rid)) {
+            const resolve = pendingWithdrawsRef.current.get(rid)!;
+            pendingWithdrawsRef.current.delete(rid);
+            resolve({
+              ok: Boolean(msg.ok),
+              reason:
+                typeof msg.reason === "string" ? msg.reason : undefined,
+              signature:
+                typeof msg.signature === "string" ? msg.signature : undefined,
+            });
+          }
         }
       };
     };
@@ -564,7 +598,10 @@ export function useMultiplayerGame() {
     if (!Number.isFinite(betInput) || betInput <= 0 || betInput > balance)
       return;
     if (betInput > 500) return;
-    setBalance((b) => b - betInput);
+    // Balance change comes back from the server after the DB debit, so we
+    // no longer optimistically mutate it here — avoids double-debit on
+    // any future UI race.
+    setInsufficient(false);
     send({ type: "placeBet", amount: Math.floor(betInput) });
   }, [isAuthed, phase, activeBet, betInput, balance, send]);
 
@@ -610,6 +647,7 @@ export function useMultiplayerGame() {
     history,
     players,
     balance,
+    insufficient,
     betInput,
     setBetInput,
     activeBet,
@@ -624,5 +662,6 @@ export function useMultiplayerGame() {
     dismissLastWin,
     chat,
     sendChat,
+    withdraw,
   };
 }

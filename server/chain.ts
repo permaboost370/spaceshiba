@@ -1,0 +1,355 @@
+// Solana chain adapter — deposit watcher + withdrawal executor.
+// Separated from index.ts to keep the game loop readable.
+
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  type ParsedInstruction,
+  type PartiallyDecodedInstruction,
+} from "@solana/web3.js";
+import {
+  createAssociatedTokenAccountInstruction,
+  createTransferCheckedInstruction,
+  getAssociatedTokenAddressSync,
+  getMint,
+} from "@solana/spl-token";
+import bs58 from "bs58";
+import {
+  getBalance,
+  getWatcherCursor,
+  markWithdrawalConfirmed,
+  markWithdrawalSent,
+  recordDepositAndCredit,
+  refundFailedWithdrawal,
+  setWatcherCursor,
+} from "./db";
+
+// --- Config ---
+const SOLANA_RPC_URL =
+  process.env.SOLANA_RPC_URL ?? "https://solana-rpc.publicnode.com";
+const TOKEN_MINT_STR = process.env.TOKEN_MINT ?? "";
+const BANK_ADDRESS_STR = process.env.BANK_ADDRESS ?? "";
+const BANK_SECRET_KEY_STR = process.env.BANK_SECRET_KEY ?? "";
+
+if (!TOKEN_MINT_STR) throw new Error("TOKEN_MINT env var not set");
+if (!BANK_ADDRESS_STR) throw new Error("BANK_ADDRESS env var not set");
+
+const connection = new Connection(SOLANA_RPC_URL, "confirmed");
+const TOKEN_MINT = new PublicKey(TOKEN_MINT_STR);
+const BANK = new PublicKey(BANK_ADDRESS_STR);
+
+// Bank's associated token account for the configured mint. Deposits land
+// here; withdrawals are sourced from here.
+const BANK_ATA = getAssociatedTokenAddressSync(TOKEN_MINT, BANK);
+const BANK_ATA_STR = BANK_ATA.toBase58();
+
+// Signer keypair — loaded on demand so the server can still run for
+// spectator-only flows if the secret isn't wired. Withdrawal attempts
+// without it will error loudly.
+function getBankKeypair(): Keypair {
+  if (!BANK_SECRET_KEY_STR) {
+    throw new Error("BANK_SECRET_KEY env var not set — cannot sign");
+  }
+  // Accept either the Solana CLI JSON-array form or a raw base58 string.
+  if (BANK_SECRET_KEY_STR.trim().startsWith("[")) {
+    const arr = JSON.parse(BANK_SECRET_KEY_STR) as number[];
+    return Keypair.fromSecretKey(Uint8Array.from(arr));
+  }
+  return Keypair.fromSecretKey(bs58.decode(BANK_SECRET_KEY_STR));
+}
+
+let decimals = 9;
+let rawPerUnit = 10n ** BigInt(decimals);
+
+export async function initChainConfig(): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const info = await getMint(connection, TOKEN_MINT);
+      decimals = info.decimals;
+      rawPerUnit = 10n ** BigInt(decimals);
+      console.log(
+        `[chain] mint ${TOKEN_MINT_STR} decimals=${decimals} bankAta=${BANK_ATA_STR}`,
+      );
+      return;
+    } catch (e) {
+      const wait = Math.min(30_000, 1000 * attempt);
+      console.error(
+        `[chain] getMint failed (attempt ${attempt}) retrying in ${wait}ms`,
+        e instanceof Error ? e.message : e,
+      );
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
+export function getDecimals(): number {
+  return decimals;
+}
+
+export function uiToRaw(amount: number): bigint {
+  if (!Number.isFinite(amount) || amount < 0) return 0n;
+  const hundredths = BigInt(Math.floor(amount * 100));
+  return (hundredths * rawPerUnit) / 100n;
+}
+
+export function rawToUi(raw: bigint): number {
+  const hundredths = (raw * 100n) / rawPerUnit;
+  return Number(hundredths) / 100;
+}
+
+// --- Deposit watcher ---
+
+type TokenBalance = {
+  accountIndex: number;
+  mint: string;
+  owner?: string;
+  uiTokenAmount: { amount: string; decimals: number };
+};
+
+// Extract (sender wallet, amount) for a deposit to BANK_ATA, by diffing
+// postTokenBalances against preTokenBalances. Returns null if the tx
+// wasn't a transfer of our mint to us.
+function extractDeposit(
+  pre: TokenBalance[] | null | undefined,
+  post: TokenBalance[] | null | undefined,
+): { sender: string; amount: bigint } | null {
+  if (!post) return null;
+  // Find the post-balance entry that belongs to BANK for our mint.
+  const bankPost = post.find(
+    (b) => b.mint === TOKEN_MINT_STR && b.owner === BANK_ADDRESS_STR,
+  );
+  if (!bankPost) return null;
+  const bankPre = (pre ?? []).find(
+    (b) =>
+      b.mint === TOKEN_MINT_STR &&
+      b.owner === BANK_ADDRESS_STR &&
+      b.accountIndex === bankPost.accountIndex,
+  );
+  const bankDelta =
+    BigInt(bankPost.uiTokenAmount.amount) -
+    BigInt(bankPre?.uiTokenAmount.amount ?? "0");
+  if (bankDelta <= 0n) return null;
+
+  // Find a sender: a token account of the same mint whose balance dropped
+  // by at least bankDelta (matching source for the transfer). If multiple,
+  // pick the largest matching drop.
+  let best: { owner: string; loss: bigint } | null = null;
+  for (const prev of pre ?? []) {
+    if (prev.mint !== TOKEN_MINT_STR) continue;
+    if (prev.owner === BANK_ADDRESS_STR) continue;
+    if (!prev.owner) continue;
+    const match = post.find(
+      (b) => b.accountIndex === prev.accountIndex && b.mint === TOKEN_MINT_STR,
+    );
+    const after = match ? BigInt(match.uiTokenAmount.amount) : 0n;
+    const loss = BigInt(prev.uiTokenAmount.amount) - after;
+    if (loss < bankDelta) continue;
+    if (!best || loss > best.loss) {
+      best = { owner: prev.owner, loss };
+    }
+  }
+  if (!best) return null;
+  return { sender: best.owner, amount: bankDelta };
+}
+
+type DepositNotify = (wallet: string, newBalanceRaw: bigint) => void;
+
+async function processSignature(
+  sig: string,
+  slot: number | null,
+  notify: DepositNotify,
+): Promise<void> {
+  const tx = await connection.getParsedTransaction(sig, {
+    maxSupportedTransactionVersion: 0,
+    commitment: "confirmed",
+  });
+  if (!tx || !tx.meta || tx.meta.err) return;
+
+  const extracted = extractDeposit(
+    tx.meta.preTokenBalances as TokenBalance[] | null,
+    tx.meta.postTokenBalances as TokenBalance[] | null,
+  );
+  if (!extracted) return;
+
+  const credited = await recordDepositAndCredit(
+    sig,
+    extracted.sender,
+    extracted.amount,
+    slot,
+  );
+  if (credited) {
+    console.log(
+      `[deposit] +${extracted.amount} raw from ${extracted.sender} sig=${sig}`,
+    );
+    const balance = await getBalance(extracted.sender);
+    notify(extracted.sender, balance);
+  }
+}
+
+export async function startDepositWatcher(
+  notify: DepositNotify,
+): Promise<void> {
+  // Bootstrap the cursor: on first boot we don't want to re-credit any
+  // historical deposits the bank has ever received. Pin the cursor at the
+  // current HEAD and only process new signatures after that point.
+  let cursor = await getWatcherCursor();
+  if (cursor === null) {
+    try {
+      const head = await connection.getSignaturesForAddress(BANK_ATA, {
+        limit: 1,
+      });
+      if (head.length > 0) {
+        cursor = head[0]!.signature;
+        await setWatcherCursor(cursor);
+        console.log(`[deposit] bootstrap cursor=${cursor}`);
+      }
+    } catch (e) {
+      console.error("[deposit] bootstrap failed", e);
+    }
+  }
+
+  const POLL_MS = 5000;
+  const tick = async () => {
+    try {
+      const options: { limit: number; until?: string } = { limit: 1000 };
+      if (cursor) options.until = cursor;
+      const sigs = await connection.getSignaturesForAddress(
+        BANK_ATA,
+        options,
+      );
+      // API returns newest-first. Process oldest-first so we only advance
+      // the cursor past a sig once its deposit has been recorded.
+      sigs.reverse();
+      for (const info of sigs) {
+        if (info.err !== null) {
+          cursor = info.signature;
+          await setWatcherCursor(cursor);
+          continue;
+        }
+        try {
+          await processSignature(info.signature, info.slot, notify);
+          cursor = info.signature;
+          await setWatcherCursor(cursor);
+        } catch (e) {
+          console.error(
+            `[deposit] processSignature ${info.signature} failed`,
+            e,
+          );
+          // Don't advance cursor on failure — we'll retry this sig next tick.
+          break;
+        }
+      }
+    } catch (e) {
+      console.error("[deposit] poll error", e);
+    } finally {
+      setTimeout(tick, POLL_MS);
+    }
+  };
+  setTimeout(tick, POLL_MS);
+  console.log(`[deposit] watcher started polling ${BANK_ATA_STR}`);
+}
+
+// --- Withdrawal executor ---
+
+export type WithdrawalResult =
+  | { ok: true; signature: string }
+  | { ok: false; reason: string };
+
+export async function executeWithdrawal(
+  withdrawalId: string,
+  recipient: string,
+  amountRaw: bigint,
+): Promise<WithdrawalResult> {
+  let recipientPk: PublicKey;
+  try {
+    recipientPk = new PublicKey(recipient);
+  } catch {
+    await refundFailedWithdrawal(withdrawalId, "bad_recipient");
+    return { ok: false, reason: "bad_recipient" };
+  }
+
+  let bank: Keypair;
+  try {
+    bank = getBankKeypair();
+  } catch (e) {
+    await refundFailedWithdrawal(withdrawalId, "no_signer");
+    return {
+      ok: false,
+      reason: e instanceof Error ? e.message : "no_signer",
+    };
+  }
+
+  const recipientAta = getAssociatedTokenAddressSync(TOKEN_MINT, recipientPk);
+
+  try {
+    const tx = new Transaction();
+
+    // Create the recipient's ATA if it doesn't exist yet — bank pays rent.
+    // It's cheap (~0.002 SOL) and saves users from having to pre-create.
+    const ataInfo = await connection.getAccountInfo(recipientAta);
+    if (!ataInfo) {
+      tx.add(
+        createAssociatedTokenAccountInstruction(
+          bank.publicKey, // payer
+          recipientAta,
+          recipientPk,
+          TOKEN_MINT,
+        ),
+      );
+    }
+
+    tx.add(
+      createTransferCheckedInstruction(
+        BANK_ATA,
+        TOKEN_MINT,
+        recipientAta,
+        bank.publicKey,
+        amountRaw,
+        decimals,
+      ),
+    );
+
+    const { blockhash, lastValidBlockHeight } =
+      await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = bank.publicKey;
+    tx.sign(bank);
+
+    const rawTx = tx.serialize();
+    const signature = await connection.sendRawTransaction(rawTx, {
+      skipPreflight: false,
+      maxRetries: 5,
+    });
+    await markWithdrawalSent(withdrawalId, signature);
+
+    const conf = await connection.confirmTransaction(
+      { signature, blockhash, lastValidBlockHeight },
+      "confirmed",
+    );
+    if (conf.value.err) {
+      await refundFailedWithdrawal(
+        withdrawalId,
+        `chain_error:${JSON.stringify(conf.value.err).slice(0, 200)}`,
+      );
+      return { ok: false, reason: "chain_error" };
+    }
+
+    await markWithdrawalConfirmed(withdrawalId);
+    console.log(
+      `[withdraw] ${amountRaw} raw to ${recipient} sig=${signature}`,
+    );
+    return { ok: true, signature };
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    console.error("[withdraw] failed", reason);
+    await refundFailedWithdrawal(withdrawalId, reason.slice(0, 200));
+    return { ok: false, reason: "submit_failed" };
+  }
+}
+
+// Prevent unused-import warnings in strict mode for imports that are only
+// used by type narrowing in future helpers.
+export type { ParsedInstruction, PartiallyDecodedInstruction, SystemProgram };

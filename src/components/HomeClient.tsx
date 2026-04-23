@@ -143,6 +143,7 @@ export function HomeClient() {
         onRename={g.renamePlayer}
         history={g.myHistory}
         balance={g.balance}
+        withdraw={g.withdraw}
       />
 
       <ShareToast lastWin={g.lastWin} onDismiss={g.dismissLastWin} />

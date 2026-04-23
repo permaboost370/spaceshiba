@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import type { MyRoundResult } from "@/lib/useMultiplayerGame";
+import type {
+  MyRoundResult,
+  WithdrawResult,
+} from "@/lib/useMultiplayerGame";
+import { BANK_ADDRESS, MAX_WITHDRAW_UI } from "@/lib/chainConfig";
 
 type Props = {
   open: boolean;
@@ -11,6 +15,7 @@ type Props = {
   onRename: (n: string) => void;
   history: MyRoundResult[];
   balance: number;
+  withdraw: (amount: number) => Promise<WithdrawResult>;
 };
 
 export function ProfileModal({
@@ -21,11 +26,50 @@ export function ProfileModal({
   onRename,
   history,
   balance,
+  withdraw,
 }: Props) {
   const { disconnect } = useWallet();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const [copied, setCopied] = useState(false);
+  const [bankCopied, setBankCopied] = useState(false);
+  const [withdrawInput, setWithdrawInput] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawMsg, setWithdrawMsg] = useState<
+    | { kind: "ok"; signature?: string }
+    | { kind: "error"; reason: string }
+    | null
+  >(null);
+
+  const copyBank = async () => {
+    try {
+      await navigator.clipboard.writeText(BANK_ADDRESS);
+      setBankCopied(true);
+      setTimeout(() => setBankCopied(false), 1200);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const submitWithdraw = async () => {
+    const amt = Math.floor(Number(withdrawInput));
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    if (amt > MAX_WITHDRAW_UI) return;
+    if (amt > balance) return;
+    setWithdrawing(true);
+    setWithdrawMsg(null);
+    const res = await withdraw(amt);
+    setWithdrawing(false);
+    if (res.ok) {
+      setWithdrawMsg({ kind: "ok", signature: res.signature });
+      setWithdrawInput("");
+    } else {
+      setWithdrawMsg({
+        kind: "error",
+        reason: res.reason ?? "unknown",
+      });
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -179,6 +223,96 @@ export function ProfileModal({
             color={net > 0 ? "text-flame" : net < 0 ? "text-danger" : "text-ink"}
           />
         </div>
+
+        {/* deposit / withdraw */}
+        {walletAddress && (
+          <div className="px-3 py-3 border-b-2 border-ink/10 space-y-3">
+            <div>
+              <div className="text-ink/50 text-[10px] uppercase tracking-[0.2em] mb-1">
+                deposit — send tokens to
+              </div>
+              <button
+                onClick={copyBank}
+                className="w-full text-left border-2 border-ink bg-bg px-2 py-1 text-ink text-xs tabular-nums break-all hover:border-flame transition-colors"
+                title="click to copy"
+              >
+                {bankCopied ? "copied!" : BANK_ADDRESS}
+              </button>
+              <div className="text-ink/50 text-[10px] mt-1 leading-tight">
+                only SPL token
+                {" "}
+                <span className="text-ink/70">
+                  3U9u…doge
+                </span>{" "}
+                is credited. other tokens are ignored. your balance
+                updates within ~10s of confirmation.
+              </div>
+            </div>
+
+            <div>
+              <div className="text-ink/50 text-[10px] uppercase tracking-[0.2em] mb-1">
+                withdraw (max {MAX_WITHDRAW_UI.toLocaleString()})
+              </div>
+              <div className="flex gap-1.5 items-stretch">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={withdrawInput}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "") return setWithdrawInput("");
+                    const n = Math.floor(Number(v) || 0);
+                    setWithdrawInput(
+                      String(Math.max(0, Math.min(MAX_WITHDRAW_UI, n))),
+                    );
+                  }}
+                  disabled={withdrawing}
+                  placeholder="amount"
+                  max={MAX_WITHDRAW_UI}
+                  min={0}
+                  className="flex-1 min-w-0 border-2 border-ink bg-bg px-2 py-1 text-ink text-sm tabular-nums disabled:opacity-50 outline-none focus:border-flame"
+                  style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+                />
+                <button
+                  onClick={submitWithdraw}
+                  disabled={
+                    withdrawing ||
+                    !withdrawInput ||
+                    Number(withdrawInput) <= 0 ||
+                    Number(withdrawInput) > balance
+                  }
+                  className="px-3 bg-ink text-bg border-2 border-ink text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+                >
+                  {withdrawing ? "sending…" : "send"}
+                </button>
+              </div>
+              {withdrawMsg?.kind === "ok" && (
+                <div className="text-flame text-[10px] uppercase tracking-widest mt-1">
+                  ✓ sent
+                  {withdrawMsg.signature && (
+                    <>
+                      {" · "}
+                      <a
+                        href={`https://solscan.io/tx/${withdrawMsg.signature}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline"
+                      >
+                        solscan
+                      </a>
+                    </>
+                  )}
+                </div>
+              )}
+              {withdrawMsg?.kind === "error" && (
+                <div className="text-danger text-[10px] uppercase tracking-widest mt-1">
+                  ✗ {withdrawMsg.reason}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* history */}
         <div className="flex-1 overflow-y-auto no-scrollbar">

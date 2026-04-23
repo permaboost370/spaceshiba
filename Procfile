@@ -1,1 +1,1 @@
-web: npx tsx server/index.ts
+web: npx tsx server/migrate.ts && npx tsx server/index.ts
