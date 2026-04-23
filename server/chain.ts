@@ -15,7 +15,13 @@ import {
   createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
   getMint,
+  TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
+
+// This mint uses the Token-2022 program (metadataPointer + tokenMetadata
+// extensions) — so every SPL-token call has to be told that. Wrapping it
+// here so we don't drift.
+const TOKEN_PROGRAM = TOKEN_2022_PROGRAM_ID;
 import bs58 from "bs58";
 import {
   getBalance,
@@ -42,8 +48,14 @@ const TOKEN_MINT = new PublicKey(TOKEN_MINT_STR);
 const BANK = new PublicKey(BANK_ADDRESS_STR);
 
 // Bank's associated token account for the configured mint. Deposits land
-// here; withdrawals are sourced from here.
-const BANK_ATA = getAssociatedTokenAddressSync(TOKEN_MINT, BANK);
+// here; withdrawals are sourced from here. The Token-2022 program ID has
+// to be passed or we'd derive the classic-program ATA — wrong address.
+const BANK_ATA = getAssociatedTokenAddressSync(
+  TOKEN_MINT,
+  BANK,
+  false,
+  TOKEN_PROGRAM,
+);
 const BANK_ATA_STR = BANK_ATA.toBase58();
 
 // Signer keypair — loaded on demand so the server can still run for
@@ -67,7 +79,12 @@ let rawPerUnit = 10n ** BigInt(decimals);
 export async function initChainConfig(): Promise<void> {
   for (let attempt = 1; ; attempt++) {
     try {
-      const info = await getMint(connection, TOKEN_MINT);
+      const info = await getMint(
+        connection,
+        TOKEN_MINT,
+        "confirmed",
+        TOKEN_PROGRAM,
+      );
       decimals = info.decimals;
       rawPerUnit = 10n ** BigInt(decimals);
       console.log(
@@ -282,7 +299,12 @@ export async function executeWithdrawal(
     };
   }
 
-  const recipientAta = getAssociatedTokenAddressSync(TOKEN_MINT, recipientPk);
+  const recipientAta = getAssociatedTokenAddressSync(
+    TOKEN_MINT,
+    recipientPk,
+    false,
+    TOKEN_PROGRAM,
+  );
 
   try {
     const tx = new Transaction();
@@ -297,6 +319,7 @@ export async function executeWithdrawal(
           recipientAta,
           recipientPk,
           TOKEN_MINT,
+          TOKEN_PROGRAM,
         ),
       );
     }
@@ -309,6 +332,8 @@ export async function executeWithdrawal(
         bank.publicKey,
         amountRaw,
         decimals,
+        [],
+        TOKEN_PROGRAM,
       ),
     );
 
