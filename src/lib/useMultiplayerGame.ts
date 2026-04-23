@@ -112,7 +112,7 @@ export function useMultiplayerGame() {
   // Balance is now server-authoritative: 0 until auth_ok + balance message
   // arrive from the server. UI units (whole tokens, 2 decimal precision).
   const [balance, setBalance] = useState<number>(0);
-  const [betInput, setBetInput] = useState<number>(100);
+  const [betInput, setBetInput] = useState<number>(10);
   const [insufficient, setInsufficient] = useState(false);
   const [myHistory, setMyHistory] = useState<MyRoundResult[]>([]);
   const [lastWin, setLastWin] = useState<{
@@ -517,6 +517,15 @@ export function useMultiplayerGame() {
           }
         } else if (msg.type === "insufficient_balance") {
           setInsufficient(true);
+        } else if (msg.type === "bet_rejected") {
+          // Today the only reason we send this is round_full; reuse the
+          // same flag so the bet button visibly fails instead of silently
+          // doing nothing. Good enough until we surface a specific toast.
+          console.warn(
+            "[bet] rejected:",
+            typeof msg.reason === "string" ? msg.reason : "unknown",
+          );
+          setInsufficient(true);
         } else if (msg.type === "withdraw_result") {
           const rid =
             typeof msg.requestId === "string" ? msg.requestId : null;
@@ -608,7 +617,7 @@ export function useMultiplayerGame() {
     if (activeBet !== null) return;
     if (!Number.isFinite(betInput) || betInput <= 0 || betInput > balance)
       return;
-    if (betInput > 500) return;
+    if (betInput > 100) return;
     // Balance change comes back from the server after the DB debit, so we
     // no longer optimistically mutate it here — avoids double-debit on
     // any future UI race.

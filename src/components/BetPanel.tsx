@@ -22,7 +22,7 @@ type Props = {
   onOpenDeposit?: () => void;
 };
 
-const MAX_BET = 500;
+const MAX_BET = 100;
 
 export function BetPanel(p: Props) {
   const canCashOut =
@@ -64,7 +64,7 @@ export function BetPanel(p: Props) {
           min={0}
           max={MAX_BET}
         />
-        {[25, 100, 500].map((v) => (
+        {[10, 50, 100].map((v) => (
           <button
             key={v}
             onClick={() => p.setBetInput(v)}

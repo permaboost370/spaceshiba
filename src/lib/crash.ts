@@ -50,11 +50,10 @@ const HOUSE_EDGE_BYTE = 20;
 
 // Hard cap on the crash point. Without a cap the heavy tail can produce
 // 500x+ rounds, and a single max-bet player holding to that would hand
-// the bank a catastrophic loss (on a 500-token bet, 500x = 250,000).
-// 100x keeps the max payout per bet bounded: bet * 100 = 50,000 on a
-// 500 max bet. Rounds the curve would have pushed above 100 all land at
-// exactly 100.
-const MAX_CRASH = 100;
+// the bank a catastrophic loss. 50x keeps the max payout per bet bounded:
+// bet * 50 = 5,000 on the 100-token max bet. Rounds the curve would have
+// pushed above 50 all land at exactly 50.
+const MAX_CRASH = 50;
 
 export function crashPointFromHash(hash: string): number {
   const edgeByte = parseInt(hash.slice(0, 2), 16);
