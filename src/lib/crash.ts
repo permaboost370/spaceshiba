@@ -41,11 +41,20 @@ export async function newSeed(
 // BustaBit-style crash point. House edge is applied by forcing an instant
 // 1.00x bust when the first byte of the hash is below HOUSE_EDGE_BYTE;
 // everything else follows the heavy-tailed inverse-CDF. Current setting:
-// 13/256 ≈ 5.08% instant bust — tuned a bit above the classic 1–3% to
-// keep the bankroll healthy given our 500-token max bet and modest
-// expected rollover. The scheme is still provably fair: seed is committed
-// by hash before bets and revealed on crash for client-side verification.
-const HOUSE_EDGE_BYTE = 13;
+// 20/256 ≈ 7.81% instant bust — stacked a bit higher than the classic
+// 1–3% so the expected house edge stays positive across the fixed-cashout
+// strategies players tend to use. The scheme is still provably fair:
+// seed is committed by hash before bets and revealed on crash for
+// client-side verification.
+const HOUSE_EDGE_BYTE = 20;
+
+// Hard cap on the crash point. Without a cap the heavy tail can produce
+// 500x+ rounds, and a single max-bet player holding to that would hand
+// the bank a catastrophic loss (on a 500-token bet, 500x = 250,000).
+// 100x keeps the max payout per bet bounded: bet * 100 = 50,000 on a
+// 500 max bet. Rounds the curve would have pushed above 100 all land at
+// exactly 100.
+const MAX_CRASH = 100;
 
 export function crashPointFromHash(hash: string): number {
   const edgeByte = parseInt(hash.slice(0, 2), 16);
@@ -55,7 +64,7 @@ export function crashPointFromHash(hash: string): number {
   const r = parseInt(hs, 16);
   const e = Math.pow(2, 52);
   const result = Math.floor((100 * e - r) / (e - r)) / 100;
-  return Math.max(1.0, Math.min(result, 1000));
+  return Math.max(1.0, Math.min(result, MAX_CRASH));
 }
 
 // Tuned growth rate — see unit tests below for milestones.
