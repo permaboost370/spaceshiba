@@ -128,13 +128,19 @@ type TokenBalance = {
 
 // Extract (sender wallet, amount) for a deposit to BANK_ATA, by diffing
 // postTokenBalances against preTokenBalances. Returns null if the tx
-// wasn't a transfer of our mint to us.
+// wasn't a transfer of our mint to us, OR if attribution is ambiguous
+// (multiple non-bank owners lost balance on our mint in the same tx).
+//
+// Attribution rule: exactly one non-bank owner of our mint must have a
+// positive loss (summed across all of their token accounts in the tx). We
+// refuse to guess when multiple owners moved our token in the same tx —
+// better to leave a rare ambiguous deposit stuck for manual review than
+// to mis-credit it.
 function extractDeposit(
   pre: TokenBalance[] | null | undefined,
   post: TokenBalance[] | null | undefined,
 ): { sender: string; amount: bigint } | null {
   if (!post) return null;
-  // Find the post-balance entry that belongs to BANK for our mint.
   const bankPost = post.find(
     (b) => b.mint === TOKEN_MINT_STR && b.owner === BANK_ADDRESS_STR,
   );
@@ -150,26 +156,41 @@ function extractDeposit(
     BigInt(bankPre?.uiTokenAmount.amount ?? "0");
   if (bankDelta <= 0n) return null;
 
-  // Find a sender: a token account of the same mint whose balance dropped
-  // by at least bankDelta (matching source for the transfer). If multiple,
-  // pick the largest matching drop.
-  let best: { owner: string; loss: bigint } | null = null;
+  // Aggregate loss by owner for every non-bank token account of our mint.
+  // Walk preTokenBalances for "started with X" and postTokenBalances for
+  // accounts that didn't exist pre (so after = 0 in the map).
+  const lossByOwner = new Map<string, bigint>();
   for (const prev of pre ?? []) {
     if (prev.mint !== TOKEN_MINT_STR) continue;
-    if (prev.owner === BANK_ADDRESS_STR) continue;
-    if (!prev.owner) continue;
+    if (!prev.owner || prev.owner === BANK_ADDRESS_STR) continue;
     const match = post.find(
       (b) => b.accountIndex === prev.accountIndex && b.mint === TOKEN_MINT_STR,
     );
     const after = match ? BigInt(match.uiTokenAmount.amount) : 0n;
-    const loss = BigInt(prev.uiTokenAmount.amount) - after;
-    if (loss < bankDelta) continue;
-    if (!best || loss > best.loss) {
-      best = { owner: prev.owner, loss };
-    }
+    const before = BigInt(prev.uiTokenAmount.amount);
+    const diff = before - after;
+    if (diff <= 0n) continue;
+    lossByOwner.set(prev.owner, (lossByOwner.get(prev.owner) ?? 0n) + diff);
   }
-  if (!best) return null;
-  return { sender: best.owner, amount: bankDelta };
+
+  // Any owners at all?
+  const losers = Array.from(lossByOwner.entries()).filter(
+    ([, loss]) => loss > 0n,
+  );
+  if (losers.length === 0) return null;
+  // Ambiguous — more than one distinct non-bank owner moved our token in
+  // this tx. Refuse to attribute; a human can reconcile via the signature.
+  if (losers.length > 1) {
+    console.warn(
+      `[deposit] ambiguous attribution: ${losers.length} owners lost balance on our mint; skipping`,
+    );
+    return null;
+  }
+  const [owner, ownerLoss] = losers[0]!;
+  // Sender must have lost at least as much as the bank gained — otherwise
+  // the bank-side delta came from somewhere we can't account for.
+  if (ownerLoss < bankDelta) return null;
+  return { sender: owner, amount: bankDelta };
 }
 
 type DepositNotify = (wallet: string, newBalanceRaw: bigint) => void;
