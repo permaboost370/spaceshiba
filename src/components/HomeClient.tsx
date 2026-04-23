@@ -166,6 +166,7 @@ export function HomeClient() {
           authStatus={g.authStatus}
           authError={g.authError}
           retryAuth={g.retryAuth}
+          onOpenDeposit={() => setProfileOpen(true)}
         />
       </section>
 

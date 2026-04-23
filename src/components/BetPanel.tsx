@@ -19,6 +19,7 @@ type Props = {
   authStatus: AuthStatus;
   authError: string | null;
   retryAuth: () => void;
+  onOpenDeposit?: () => void;
 };
 
 const MAX_BET = 500;
@@ -74,6 +75,17 @@ export function BetPanel(p: Props) {
             {v}
           </button>
         ))}
+        {p.walletAddress && p.onOpenDeposit && (
+          <button
+            onClick={p.onOpenDeposit}
+            disabled={p.activeBet !== null}
+            title="add funds — opens deposit"
+            className="px-2 sm:px-2.5 bg-flame text-ink border-2 border-ink text-xs sm:text-sm uppercase tracking-widest hover:bg-ink hover:text-flame disabled:opacity-40 transition-colors"
+            style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+          >
+            + fund
+          </button>
+        )}
       </div>
 
       <div className="relative h-12 sm:h-14">
