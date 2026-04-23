@@ -155,15 +155,20 @@ export async function enqueueWithdrawal(
   }
 }
 
+// Returns true if we actually transitioned this row from 'pending' → 'sent'.
+// A false return means the row has been moved to another status since we
+// enqueued (e.g. the reconciler decided it was stale and refunded it) —
+// the caller MUST NOT submit the signed tx in that case, or we'd double-pay.
 export async function markWithdrawalSent(
   id: string,
   signature: string,
-): Promise<void> {
-  await pool.query(
+): Promise<boolean> {
+  const r = await pool.query(
     `UPDATE withdrawals SET signature = $2, status = 'sent'
       WHERE id = $1 AND status = 'pending'`,
     [id, signature],
   );
+  return (r.rowCount ?? 0) > 0;
 }
 
 // --- Seed chain ---

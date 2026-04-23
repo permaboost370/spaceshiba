@@ -403,7 +403,18 @@ export async function executeWithdrawal(
       return { ok: false, reason: "sign_failed" };
     }
     const signature = bs58.encode(sigBytes);
-    await markWithdrawalSent(withdrawalId, signature);
+    // Transition the row to 'sent' BEFORE sending the tx. If the reconciler
+    // refunded this withdrawal while we were awaiting the RPC calls above
+    // (status='pending' aged past RECONCILE_MIN_AGE_MS), this UPDATE will
+    // match 0 rows and we must not submit — otherwise the bank pays out on
+    // chain AND the player already got their balance refunded = double-pay.
+    const claimed = await markWithdrawalSent(withdrawalId, signature);
+    if (!claimed) {
+      console.warn(
+        `[withdraw] race-aborted ${withdrawalId}: row no longer in 'pending' (likely reconciler refunded)`,
+      );
+      return { ok: false, reason: "race_aborted" };
+    }
 
     const rawTx = tx.serialize();
     await connection.sendRawTransaction(rawTx, {
