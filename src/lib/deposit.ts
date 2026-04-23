@@ -16,6 +16,8 @@ import {
   getAccount,
   getAssociatedTokenAddressSync,
   getMint,
+  TokenAccountNotFoundError,
+  TokenInvalidAccountOwnerError,
   TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 import { BANK_ADDRESS, TOKEN_MINT_ADDRESS } from "./chainConfig";
@@ -58,12 +60,16 @@ export type DepositBuild = {
   rawAmount: bigint;
 };
 
-// Read the user's token balance for our mint (in UI units). Returns 0 if
-// their ATA doesn't exist yet (no tokens of this mint).
+// Read the user's token balance for our mint (in UI units).
+//   - returns 0 if the ATA legitimately doesn't exist (user has never held
+//     this token)
+//   - returns null if the RPC call failed, so the UI can distinguish
+//     "known-empty" from "don't-know-yet" and avoid blocking the deposit
+//     button on a transient RPC failure
 export async function getUserTokenBalance(
   connection: Connection,
   owner: PublicKey,
-): Promise<number> {
+): Promise<number | null> {
   const ata = getAssociatedTokenAddressSync(
     TOKEN_MINT,
     owner,
@@ -76,8 +82,15 @@ export async function getUserTokenBalance(
     const raw = info.amount; // bigint
     const hundredths = (raw * 100n) / 10n ** BigInt(decimals);
     return Number(hundredths) / 100;
-  } catch {
-    return 0;
+  } catch (e) {
+    if (
+      e instanceof TokenAccountNotFoundError ||
+      e instanceof TokenInvalidAccountOwnerError
+    ) {
+      return 0;
+    }
+    console.warn("[deposit] wallet balance fetch failed", e);
+    return null;
   }
 }
 

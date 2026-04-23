@@ -76,7 +76,10 @@ export function ProfileModal({
     if (!publicKey) return;
     const amt = Math.floor(Number(depositInput));
     if (!Number.isFinite(amt) || amt <= 0) return;
-    if (walletBalance !== null && amt > walletBalance) return;
+    // Only block on over-balance when we actually know the balance; a null
+    // walletBalance means the RPC read failed, so we let Phantom be the
+    // final authority (it will reject if the user genuinely lacks funds).
+    if (typeof walletBalance === "number" && amt > walletBalance) return;
     try {
       setDepositStatus({ kind: "signing" });
       const { tx } = await buildDepositTx(connection, publicKey, amt);
@@ -294,10 +297,10 @@ export function ProfileModal({
                   deposit
                 </div>
                 <div className="text-ink/50 text-[10px] tabular-nums">
-                  {walletBalance !== null ? (
-                    <>wallet: §{walletBalance.toFixed(0)}</>
+                  {walletBalance === null ? (
+                    <>wallet: rpc?</>
                   ) : (
-                    <>…</>
+                    <>wallet: §{walletBalance.toFixed(0)}</>
                   )}
                 </div>
               </div>
@@ -324,7 +327,7 @@ export function ProfileModal({
                     depositing ||
                     !depositInput ||
                     Number(depositInput) <= 0 ||
-                    (walletBalance !== null &&
+                    (typeof walletBalance === "number" &&
                       Number(depositInput) > walletBalance)
                   }
                   className="px-3 bg-flame text-ink border-2 border-ink text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
