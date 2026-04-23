@@ -15,6 +15,7 @@ import { ProfileModal } from "@/components/ProfileModal";
 import { MobileMenu, HamburgerButton } from "@/components/MobileMenu";
 import { ShareToast } from "@/components/ShareToast";
 import { DisclaimerGate } from "@/components/DisclaimerGate";
+import { ChatPanel } from "@/components/ChatPanel";
 
 export function HomeClient() {
   const g = useMultiplayerGame();
@@ -96,12 +97,22 @@ export function HomeClient() {
           </div>
           <WalletButton onOpenProfile={() => setProfileOpen(true)} />
           <NameTag name={g.playerName} onRename={g.renamePlayer} />
-          <div className="flex-1 min-h-0">
-            <PlayersList
-              players={g.players}
-              phase={g.phase}
-              selfId={g.playerId}
-            />
+          <div className="flex-1 min-h-0 flex flex-col gap-2">
+            <div className="flex-[3] min-h-0">
+              <PlayersList
+                players={g.players}
+                phase={g.phase}
+                selfId={g.playerId}
+              />
+            </div>
+            <div className="flex-[2] min-h-0">
+              <ChatPanel
+                messages={g.chat}
+                sendChat={g.sendChat}
+                canChat={g.authStatus === "authenticated"}
+                selfWallet={g.walletAddress}
+              />
+            </div>
           </div>
         </aside>
       </div>

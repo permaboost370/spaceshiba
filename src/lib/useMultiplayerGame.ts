@@ -35,6 +35,16 @@ export type MyRoundResult = {
   timestamp: number;
 };
 
+export type ChatMessage = {
+  id: string;
+  from: string;
+  wallet: string;
+  text: string;
+  ts: number;
+};
+
+const MAX_CHAT_KEEP = 50;
+
 type ServerState = {
   type: "state";
   phase: Phase;
@@ -88,6 +98,7 @@ export function useMultiplayerGame() {
   const [playerName, setPlayerName] = useState<string>("");
   const [authStatus, setAuthStatus] = useState<AuthStatus>("idle");
   const [authError, setAuthError] = useState<string | null>(null);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
 
   const [phase, setPhase] = useState<Phase>("betting");
   const [multiplier, setMultiplier] = useState(1);
@@ -357,6 +368,22 @@ export function useMultiplayerGame() {
     setAuthError(null);
   }, []);
 
+  const sendChat = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      if (authStatusRef.current !== "authenticated") return;
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      try {
+        ws.send(JSON.stringify({ type: "chat", text: trimmed.slice(0, 200) }));
+      } catch {
+        /* ignore */
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     let ws: WebSocket | null = null;
@@ -443,6 +470,20 @@ export function useMultiplayerGame() {
           setAuthError(
             typeof msg.reason === "string" ? msg.reason : "auth_failed",
           );
+        } else if (msg.type === "chat_history") {
+          if (Array.isArray(msg.messages)) {
+            setChat(msg.messages as ChatMessage[]);
+          }
+        } else if (msg.type === "chat") {
+          const m = msg.message as ChatMessage | undefined;
+          if (!m || typeof m.id !== "string") return;
+          setChat((prev) => {
+            if (prev.some((x) => x.id === m.id)) return prev;
+            const next = [...prev, m];
+            return next.length > MAX_CHAT_KEEP
+              ? next.slice(next.length - MAX_CHAT_KEEP)
+              : next;
+          });
         }
       };
     };
@@ -579,5 +620,7 @@ export function useMultiplayerGame() {
     setMuted: audio.setMuted,
     lastWin,
     dismissLastWin,
+    chat,
+    sendChat,
   };
 }
