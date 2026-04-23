@@ -166,6 +166,38 @@ export async function markWithdrawalSent(
   );
 }
 
+// Withdrawals that look stuck — pending/sent for longer than olderThanMs.
+// Returned to the reconciler so they can be resolved by checking on-chain
+// status or refunded if they never reached the network.
+export async function getStalePendingWithdrawals(
+  olderThanMs: number,
+): Promise<
+  Array<{
+    id: string;
+    wallet: string;
+    amount: bigint;
+    signature: string | null;
+    status: string;
+  }>
+> {
+  const r = await pool.query<{
+    id: string;
+    wallet: string;
+    amount: bigint;
+    signature: string | null;
+    status: string;
+  }>(
+    `SELECT id, wallet, amount, signature, status
+       FROM withdrawals
+      WHERE status IN ('pending','sent')
+        AND requested_at < NOW() - ($1 || ' milliseconds')::interval
+      ORDER BY requested_at ASC
+      LIMIT 100`,
+    [String(olderThanMs)],
+  );
+  return r.rows;
+}
+
 export async function markWithdrawalConfirmed(id: string): Promise<void> {
   await pool.query(
     `UPDATE withdrawals SET status = 'confirmed', completed_at = NOW()

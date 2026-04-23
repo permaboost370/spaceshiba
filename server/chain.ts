@@ -25,6 +25,7 @@ const TOKEN_PROGRAM = TOKEN_2022_PROGRAM_ID;
 import bs58 from "bs58";
 import {
   getBalance,
+  getStalePendingWithdrawals,
   getWatcherCursor,
   markWithdrawalConfirmed,
   markWithdrawalSent,
@@ -364,12 +365,24 @@ export async function executeWithdrawal(
     tx.feePayer = bank.publicKey;
     tx.sign(bank);
 
+    // Signature is deterministic once signed — extract it BEFORE sending
+    // so the DB has a signature recorded even if the process crashes
+    // between the send and the confirm. The reconciler uses this to tell
+    // apart "never submitted" (no signature) from "submitted, outcome
+    // unknown" (signature present) on restart.
+    const sigBytes = tx.signatures[0]?.signature;
+    if (!sigBytes) {
+      await refundFailedWithdrawal(withdrawalId, "sign_failed");
+      return { ok: false, reason: "sign_failed" };
+    }
+    const signature = bs58.encode(sigBytes);
+    await markWithdrawalSent(withdrawalId, signature);
+
     const rawTx = tx.serialize();
-    const signature = await connection.sendRawTransaction(rawTx, {
+    await connection.sendRawTransaction(rawTx, {
       skipPreflight: false,
       maxRetries: 5,
     });
-    await markWithdrawalSent(withdrawalId, signature);
 
     const conf = await connection.confirmTransaction(
       { signature, blockhash, lastValidBlockHeight },
@@ -394,6 +407,99 @@ export async function executeWithdrawal(
     await refundFailedWithdrawal(withdrawalId, reason.slice(0, 200));
     return { ok: false, reason: "submit_failed" };
   }
+}
+
+// --- Reconciliation worker ---
+
+// How long we wait before touching a pending/sent withdrawal. Solana
+// blockhashes live ~90s; after that a tx is permanently unable to land.
+// We wait considerably longer than that so any RPC replication lag has
+// fully settled before we act on a "not found" signature status.
+const RECONCILE_MIN_AGE_MS = 5 * 60 * 1000;
+const RECONCILE_POLL_MS = 60 * 1000;
+
+async function reconcileOne(w: {
+  id: string;
+  wallet: string;
+  signature: string | null;
+  status: string;
+}): Promise<void> {
+  // 'pending' with no signature means executeWithdrawal never got past
+  // signing (e.g. process crashed before we could submit). Nothing was
+  // sent to the network, so refunding is safe.
+  if (!w.signature) {
+    console.log(`[reconcile] refunding ${w.id} (never submitted)`);
+    await refundFailedWithdrawal(w.id, "not_submitted");
+    return;
+  }
+
+  let status;
+  try {
+    status = await connection.getSignatureStatus(w.signature, {
+      searchTransactionHistory: true,
+    });
+  } catch (e) {
+    console.error(`[reconcile] getSignatureStatus failed ${w.id}`, e);
+    return;
+  }
+  const val = status.value;
+
+  if (val && val.err) {
+    console.log(`[reconcile] refunding ${w.id} (chain error)`);
+    await refundFailedWithdrawal(w.id, "chain_error_reconciled");
+    return;
+  }
+
+  const confirmed =
+    val?.confirmationStatus === "confirmed" ||
+    val?.confirmationStatus === "finalized";
+  if (confirmed) {
+    console.log(`[reconcile] marking confirmed ${w.id}`);
+    await markWithdrawalConfirmed(w.id);
+    return;
+  }
+
+  if (!val) {
+    // Not found after 5+ minutes. Blockhash has long since expired; the
+    // tx cannot land now. Refund is safe.
+    console.log(`[reconcile] refunding ${w.id} (not found, expired)`);
+    await refundFailedWithdrawal(w.id, "not_found_expired");
+    return;
+  }
+
+  // val exists with no err and not yet confirmed — leave alone, try again
+  // next pass.
+}
+
+async function reconcileOnce(): Promise<void> {
+  let list;
+  try {
+    list = await getStalePendingWithdrawals(RECONCILE_MIN_AGE_MS);
+  } catch (e) {
+    console.error("[reconcile] query failed", e);
+    return;
+  }
+  if (list.length === 0) return;
+  console.log(`[reconcile] ${list.length} stale withdrawals to resolve`);
+  for (const w of list) {
+    try {
+      await reconcileOne(w);
+    } catch (e) {
+      console.error(`[reconcile] one failed ${w.id}`, e);
+    }
+  }
+}
+
+export function startWithdrawalReconciler(): void {
+  // Kick once at startup — if the previous process crashed mid-withdrawal,
+  // we want to resolve the stragglers before accepting new ones.
+  reconcileOnce().catch((e) => console.error("[reconcile] initial run", e));
+  setInterval(() => {
+    reconcileOnce().catch((e) => console.error("[reconcile] tick", e));
+  }, RECONCILE_POLL_MS);
+  console.log(
+    `[reconcile] worker started (min age ${RECONCILE_MIN_AGE_MS}ms, poll ${RECONCILE_POLL_MS}ms)`,
+  );
 }
 
 // Prevent unused-import warnings in strict mode for imports that are only
