@@ -19,6 +19,8 @@ export type RoundHistory = {
   nonce: number;
   crashPoint: number;
   hash: string;
+  serverSeed: string;
+  clientSeed: string;
   winners: number;
   totalWagered: number;
   totalPaidOut: number;

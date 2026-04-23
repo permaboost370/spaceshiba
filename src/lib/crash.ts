@@ -1,7 +1,7 @@
 // Provably-fair crash curve. Runs client-side for now; a real server would
 // keep the serverSeed secret and reveal it after the round for verification.
 
-async function sha256(msg: string): Promise<string> {
+export async function sha256(msg: string): Promise<string> {
   const buf = new TextEncoder().encode(msg);
   // Cast works around a newer lib.dom/Node type conflict introduced by
   // @solana/* deps — runtime Uint8Array satisfies BufferSource fine.
@@ -38,11 +38,18 @@ export async function newSeed(
   return { serverSeed, clientSeed, nonce, hash };
 }
 
-// BustaBit-style crash point with ~3% house edge — 3/101 rounds
-// crash instantly at 1.00x, rest follow a heavy-tailed distribution.
+// BustaBit-style crash point. House edge is applied by forcing an instant
+// 1.00x bust when the first byte of the hash is below HOUSE_EDGE_BYTE;
+// everything else follows the heavy-tailed inverse-CDF. Current setting:
+// 13/256 ≈ 5.08% instant bust — tuned a bit above the classic 1–3% to
+// keep the bankroll healthy given our 500-token max bet and modest
+// expected rollover. The scheme is still provably fair: seed is committed
+// by hash before bets and revealed on crash for client-side verification.
+const HOUSE_EDGE_BYTE = 13;
+
 export function crashPointFromHash(hash: string): number {
   const edgeByte = parseInt(hash.slice(0, 2), 16);
-  if (edgeByte < 8) return 1.0;
+  if (edgeByte < HOUSE_EDGE_BYTE) return 1.0;
 
   const hs = hash.slice(0, 13);
   const r = parseInt(hs, 16);
