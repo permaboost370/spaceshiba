@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import type {
   MyRoundResult,
   WithdrawResult,
 } from "@/lib/useMultiplayerGame";
 import { BANK_ADDRESS, MAX_WITHDRAW_UI } from "@/lib/chainConfig";
+import { buildDepositTx, getUserTokenBalance } from "@/lib/deposit";
 
 type Props = {
   open: boolean;
@@ -28,7 +29,8 @@ export function ProfileModal({
   balance,
   withdraw,
 }: Props) {
-  const { disconnect } = useWallet();
+  const { disconnect, publicKey, sendTransaction } = useWallet();
+  const { connection } = useConnection();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
   const [copied, setCopied] = useState(false);
@@ -40,6 +42,65 @@ export function ProfileModal({
     | { kind: "error"; reason: string }
     | null
   >(null);
+
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [depositInput, setDepositInput] = useState("");
+  const [depositStatus, setDepositStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "signing" }
+    | { kind: "confirming"; signature: string }
+    | { kind: "ok"; signature: string }
+    | { kind: "error"; reason: string }
+  >({ kind: "idle" });
+  const depositing =
+    depositStatus.kind === "signing" || depositStatus.kind === "confirming";
+
+  // Read the user's on-chain token balance whenever the modal opens (and
+  // after a successful deposit so the UI reflects the drawdown).
+  useEffect(() => {
+    if (!open || !publicKey) return;
+    let cancelled = false;
+    getUserTokenBalance(connection, publicKey)
+      .then((b) => {
+        if (!cancelled) setWalletBalance(b);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletBalance(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, publicKey, connection, depositStatus]);
+
+  const submitDeposit = async () => {
+    if (!publicKey) return;
+    const amt = Math.floor(Number(depositInput));
+    if (!Number.isFinite(amt) || amt <= 0) return;
+    if (walletBalance !== null && amt > walletBalance) return;
+    try {
+      setDepositStatus({ kind: "signing" });
+      const { tx } = await buildDepositTx(connection, publicKey, amt);
+      const signature = await sendTransaction(tx, connection);
+      setDepositStatus({ kind: "confirming", signature });
+      // Wait for on-chain confirmation. The server's deposit watcher picks
+      // it up independently within a few seconds and credits the in-game
+      // balance via WS; we don't need to tell the server anything.
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash("confirmed");
+      await connection.confirmTransaction(
+        { signature, blockhash, lastValidBlockHeight },
+        "confirmed",
+      );
+      setDepositStatus({ kind: "ok", signature });
+      setDepositInput("");
+    } catch (e) {
+      const reason =
+        e instanceof Error
+          ? e.message.slice(0, 80)
+          : "deposit_failed";
+      setDepositStatus({ kind: "error", reason });
+    }
+  };
 
   const copyBank = async () => {
     try {
@@ -228,25 +289,94 @@ export function ProfileModal({
         {walletAddress && (
           <div className="px-3 py-3 border-b-2 border-ink/10 space-y-3">
             <div>
-              <div className="text-ink/50 text-[10px] uppercase tracking-[0.2em] mb-1">
-                deposit — send tokens to
+              <div className="flex items-baseline justify-between mb-1">
+                <div className="text-ink/50 text-[10px] uppercase tracking-[0.2em]">
+                  deposit
+                </div>
+                <div className="text-ink/50 text-[10px] tabular-nums">
+                  {walletBalance !== null ? (
+                    <>wallet: §{walletBalance.toFixed(0)}</>
+                  ) : (
+                    <>…</>
+                  )}
+                </div>
               </div>
-              <button
-                onClick={copyBank}
-                className="w-full text-left border-2 border-ink bg-bg px-2 py-1 text-ink text-xs tabular-nums break-all hover:border-flame transition-colors"
-                title="click to copy"
-              >
-                {bankCopied ? "copied!" : BANK_ADDRESS}
-              </button>
-              <div className="text-ink/50 text-[10px] mt-1 leading-tight">
-                only SPL token
-                {" "}
-                <span className="text-ink/70">
-                  3U9u…doge
-                </span>{" "}
-                is credited. other tokens are ignored. your balance
-                updates within ~10s of confirmation.
+              <div className="flex gap-1.5 items-stretch">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={depositInput}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "") return setDepositInput("");
+                    const n = Math.floor(Number(v) || 0);
+                    setDepositInput(String(Math.max(0, n)));
+                  }}
+                  disabled={depositing}
+                  placeholder="amount"
+                  min={0}
+                  className="flex-1 min-w-0 border-2 border-ink bg-bg px-2 py-1 text-ink text-sm tabular-nums disabled:opacity-50 outline-none focus:border-flame"
+                  style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+                />
+                <button
+                  onClick={submitDeposit}
+                  disabled={
+                    depositing ||
+                    !depositInput ||
+                    Number(depositInput) <= 0 ||
+                    (walletBalance !== null &&
+                      Number(depositInput) > walletBalance)
+                  }
+                  className="px-3 bg-flame text-ink border-2 border-ink text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
+                  title="sign + send in your wallet"
+                >
+                  {depositStatus.kind === "signing"
+                    ? "sign…"
+                    : depositStatus.kind === "confirming"
+                      ? "confirming…"
+                      : "deposit"}
+                </button>
               </div>
+              {depositStatus.kind === "ok" && (
+                <div className="text-flame text-[10px] uppercase tracking-widest mt-1">
+                  ✓ sent ·{" "}
+                  <a
+                    href={`https://solscan.io/tx/${depositStatus.signature}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline"
+                  >
+                    solscan
+                  </a>
+                  {" — balance updates in ~10s"}
+                </div>
+              )}
+              {depositStatus.kind === "error" && (
+                <div className="text-danger text-[10px] uppercase tracking-widest mt-1">
+                  ✗ {depositStatus.reason}
+                </div>
+              )}
+              <details className="mt-1.5 text-ink/50 text-[10px]">
+                <summary className="cursor-pointer hover:text-ink/70 uppercase tracking-widest">
+                  or send manually
+                </summary>
+                <div className="mt-1.5 space-y-1">
+                  <button
+                    onClick={copyBank}
+                    className="w-full text-left border-2 border-ink bg-bg px-2 py-1 text-ink text-xs tabular-nums break-all hover:border-flame transition-colors"
+                    title="click to copy"
+                  >
+                    {bankCopied ? "copied!" : BANK_ADDRESS}
+                  </button>
+                  <div className="leading-tight">
+                    only SPL token{" "}
+                    <span className="text-ink/70">3U9u…doge</span> is
+                    credited. other tokens are ignored. your balance updates
+                    within ~10s of confirmation.
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div>
