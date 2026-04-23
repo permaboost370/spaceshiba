@@ -13,3 +13,6 @@ bg.png
 
 .vercel
 .env*.local
+
+# Claude Code session state
+.claude/
