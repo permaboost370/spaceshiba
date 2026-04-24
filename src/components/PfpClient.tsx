@@ -30,7 +30,6 @@ export function PfpClient() {
   const walletAddress = publicKey?.toBase58() ?? null;
 
   const [selection, setSelection] = useState<TraitSelection>(defaultSelection);
-  const [userPrompt, setUserPrompt] = useState<string>("");
   const [gen, setGen] = useState<GenState>({ kind: "idle" });
   const [gallery, setGallery] = useState<SavedPfp[]>([]);
   const [selectedId, setSelectedIdState] = useState<string | null>(null);
@@ -54,7 +53,6 @@ export function PfpClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           traits: selection,
-          prompt: userPrompt,
           numImages: total,
         }),
       });
@@ -68,7 +66,7 @@ export function PfpClient() {
       const msg = e instanceof Error ? e.message : "Generation failed";
       setGen({ kind: "error", message: msg });
     }
-  }, [gen.kind, selection, userPrompt]);
+  }, [gen.kind, selection]);
 
   const saveAndUse = (result: GenResult) => {
     const id = `${Date.now()}-${result.seed}`;
@@ -76,7 +74,7 @@ export function PfpClient() {
       id,
       url: result.url,
       traits: selection,
-      prompt: userPrompt,
+      prompt: "",
       seed: result.seed,
       createdAt: Date.now(),
     };
@@ -92,7 +90,7 @@ export function PfpClient() {
       id,
       url: result.url,
       traits: selection,
-      prompt: userPrompt,
+      prompt: "",
       seed: result.seed,
       createdAt: Date.now(),
     };
@@ -224,27 +222,6 @@ export function PfpClient() {
                 onChange={(v) => setTrait(cat.id, v)}
               />
             ))}
-
-            <div className="border-t-2 border-ink/25 pt-2">
-              <label
-                className="block text-ink/55 text-[10px] uppercase tracking-[0.22em] mb-1"
-                style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-              >
-                extra prompt (optional)
-              </label>
-              <textarea
-                value={userPrompt}
-                onChange={(e) => setUserPrompt(e.target.value.slice(0, 200))}
-                placeholder="// e.g. laser eyes, galaxy in the visor"
-                className="w-full bg-bg border-2 border-ink px-2 py-1 text-ink placeholder-ink/35 focus:outline-none text-[13px] resize-none"
-                style={{ fontFamily: "var(--font-hand)", fontWeight: 400 }}
-                rows={2}
-                maxLength={200}
-              />
-              <div className="text-right text-ink/40 text-[10px] tabular-nums mt-0.5">
-                {userPrompt.length}/200
-              </div>
-            </div>
           </div>
 
           <button

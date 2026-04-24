@@ -34,7 +34,6 @@ function rateLimit(ip: string): { ok: boolean; retryAfterS: number } {
 
 type Body = {
   traits?: Record<string, string>;
-  prompt?: string;
   numImages?: number;
 };
 
@@ -47,12 +46,11 @@ function sanitize(body: Body) {
     const match = cat.options.find((o) => o.id === incoming);
     traits[cat.id] = match ? match.id : cat.options[0].id;
   }
-  const userPrompt = typeof body.prompt === "string" ? body.prompt.slice(0, 200) : "";
   const numImages = Math.max(
     1,
     Math.min(4, Math.floor(Number(body.numImages) || 1)),
   );
-  return { traits, userPrompt, numImages };
+  return { traits, numImages };
 }
 
 // Builds an absolute URL for the reference image. fal.ai fetches the
@@ -95,8 +93,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { traits, userPrompt, numImages } = sanitize(body);
-  const prompt = composePrompt(traits, userPrompt);
+  const { traits, numImages } = sanitize(body);
+  const prompt = composePrompt(traits);
   const imageUrl = refImageUrl(req);
 
   fal.config({ credentials: process.env.FAL_KEY });
