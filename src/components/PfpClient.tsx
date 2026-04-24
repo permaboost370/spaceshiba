@@ -165,12 +165,11 @@ export function PfpClient() {
 
   return (
     <main
-      className="relative w-full flex flex-col overflow-hidden bg-bg"
-      style={{ minHeight: "100svh" }}
+      className="relative w-full flex flex-col bg-bg min-h-[100svh] md:h-[100svh] md:overflow-hidden"
     >
       <div className="absolute inset-0 graph-paper opacity-50 pointer-events-none" />
 
-      <header className="relative z-20 flex items-center gap-2 px-3 pt-2 sm:px-4 sm:pt-3">
+      <header className="relative z-20 shrink-0 flex items-center gap-2 px-3 pt-2 sm:px-4 sm:pt-3">
         <Link
           href="/"
           className="shrink-0 border-2 border-ink bg-surface px-2 py-1 text-ink text-[11px] uppercase tracking-[0.22em] hover:bg-ink hover:text-bg transition-colors"
@@ -195,9 +194,9 @@ export function PfpClient() {
         </div>
       </header>
 
-      <div className="relative z-10 flex-1 min-h-0 px-3 sm:px-4 pt-3 pb-4 flex flex-col md:flex-row gap-3 sm:gap-4">
+      <div className="relative z-10 flex-1 md:min-h-0 px-3 sm:px-4 pt-3 pb-4 flex flex-col md:flex-row gap-3 sm:gap-4">
         {/* LEFT: results / preview area */}
-        <section className="flex-1 min-w-0 flex flex-col gap-3">
+        <section className="flex-1 min-w-0 md:min-h-0 flex flex-col gap-3">
           <ResultsPanel
             state={gen}
             onUse={saveAndUse}
@@ -229,8 +228,8 @@ export function PfpClient() {
         </section>
 
         {/* RIGHT: traits + controls */}
-        <aside className="w-full md:w-80 lg:w-96 shrink-0 flex flex-col gap-3">
-          <div className="bg-surface border-2 border-ink p-3 flex flex-col gap-3 max-h-[65vh] md:max-h-none overflow-y-auto no-scrollbar">
+        <aside className="w-full md:w-72 lg:w-80 xl:w-96 shrink-0 md:min-h-0 flex flex-col gap-3">
+          <div className="bg-surface border-2 border-ink p-2.5 sm:p-3 flex flex-col gap-2 sm:gap-2.5 flex-1 md:min-h-0 overflow-y-auto">
             {TRAIT_CATEGORIES.map((cat) => (
               <TraitGroup
                 key={cat.id}
@@ -241,7 +240,7 @@ export function PfpClient() {
               />
             ))}
 
-            <div className="border-t-2 border-ink/25 pt-3">
+            <div className="border-t-2 border-ink/25 pt-2">
               <TraitGroup
                 label="style"
                 options={STYLE_PRESETS.map((s) => ({ id: s.id, label: s.label }))}
@@ -261,7 +260,7 @@ export function PfpClient() {
                 value={userPrompt}
                 onChange={(e) => setUserPrompt(e.target.value.slice(0, 200))}
                 placeholder="// e.g. laser eyes, galaxy in the visor"
-                className="w-full bg-bg border-2 border-ink px-2 py-1.5 text-ink placeholder-ink/35 focus:outline-none text-sm resize-none"
+                className="w-full bg-bg border-2 border-ink px-2 py-1 text-ink placeholder-ink/35 focus:outline-none text-[13px] resize-none"
                 style={{ fontFamily: "var(--font-hand)", fontWeight: 400 }}
                 rows={2}
                 maxLength={200}
@@ -275,7 +274,7 @@ export function PfpClient() {
           <button
             onClick={generate}
             disabled={gen.kind === "loading"}
-            className="bg-flame text-on-flame border-2 border-ink shadow-[4px_4px_0_#0a0a0a] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#0a0a0a] transition-all py-3 text-lg sm:text-xl uppercase tracking-wider disabled:opacity-40 disabled:shadow-none"
+            className="shrink-0 bg-flame text-on-flame border-2 border-ink shadow-[4px_4px_0_#0a0a0a] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#0a0a0a] transition-all py-2.5 sm:py-3 text-base sm:text-lg md:text-xl uppercase tracking-wider disabled:opacity-40 disabled:shadow-none"
             style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
           >
             {gen.kind === "loading"
@@ -322,19 +321,19 @@ function TraitGroup({
   return (
     <div>
       <div
-        className="text-ink/55 text-[10px] uppercase tracking-[0.22em] mb-1.5"
+        className="text-ink/55 text-[10px] uppercase tracking-[0.22em] mb-1"
         style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       >
         {label}
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         {options.map((o) => {
           const active = o.id === value;
           return (
             <button
               key={o.id}
               onClick={() => onChange(o.id)}
-              className={`px-2 py-1 border-2 text-[11px] uppercase tracking-widest transition-colors ${
+              className={`px-1.5 py-0.5 border-2 text-[10px] sm:text-[11px] uppercase tracking-wider leading-tight transition-colors ${
                 active
                   ? "bg-flame text-on-flame border-flame"
                   : "bg-surface text-ink border-ink/60 hover:border-ink hover:bg-ink/10"
@@ -365,9 +364,12 @@ function ResultsPanel({
   onShare: (r: GenResult) => void;
   onDownload: (r: GenResult) => void;
 }) {
+  const frame =
+    "flex-1 md:min-h-0 min-h-[260px] bg-surface border-2 border-ink";
+
   if (state.kind === "idle") {
     return (
-      <div className="flex-1 bg-surface border-2 border-ink min-h-[260px] md:min-h-[420px] flex items-center justify-center p-6">
+      <div className={`${frame} flex items-center justify-center p-6`}>
         <IdleHint />
       </div>
     );
@@ -375,9 +377,9 @@ function ResultsPanel({
 
   if (state.kind === "loading") {
     return (
-      <div className="flex-1 bg-surface border-2 border-ink p-3 flex flex-col gap-3 min-h-[260px] md:min-h-[420px]">
+      <div className={`${frame} p-3 flex flex-col gap-3`}>
         <LaunchBanner total={state.total} />
-        <div className="grid grid-cols-2 gap-2 flex-1">
+        <div className="grid grid-cols-2 gap-2 flex-1 min-h-0">
           {Array.from({ length: state.total }).map((_, i) => (
             <LoadingTile key={i} index={i} />
           ))}
@@ -388,7 +390,7 @@ function ResultsPanel({
 
   if (state.kind === "error") {
     return (
-      <div className="flex-1 bg-surface border-2 border-danger p-6 flex flex-col items-center justify-center gap-3 min-h-[260px] md:min-h-[420px] text-center">
+      <div className={`flex-1 md:min-h-0 min-h-[260px] bg-surface border-2 border-danger p-6 flex flex-col items-center justify-center gap-3 text-center`}>
         <div
           className="text-danger text-lg uppercase tracking-widest"
           style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
@@ -396,7 +398,7 @@ function ResultsPanel({
           generation failed
         </div>
         <div
-          className="text-ink/70 text-sm"
+          className="text-ink/70 text-sm break-words max-w-full"
           style={{ fontFamily: "var(--font-hand)" }}
         >
           {state.message}
@@ -413,8 +415,8 @@ function ResultsPanel({
   }
 
   return (
-    <div className="flex-1 bg-surface border-2 border-ink p-3 min-h-[260px] md:min-h-[420px]">
-      <div className="grid grid-cols-2 gap-2 h-full">
+    <div className={`${frame} p-3`}>
+      <div className="grid grid-cols-2 gap-2 h-full min-h-0">
         {state.results.map((r, i) => (
           <ResultTile
             key={`${r.seed}-${i}`}
@@ -509,47 +511,91 @@ function ResultTile({
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="relative border-2 border-ink bg-bg overflow-hidden group"
-      style={{ aspectRatio: "1 / 1" }}
+      className="relative border-2 border-ink bg-bg overflow-hidden flex flex-col min-h-0"
     >
-      <img
-        src={result.url}
-        alt="generated spaceshiba pfp"
-        className="absolute inset-0 w-full h-full object-cover"
-      />
-      <div className="absolute inset-0 bg-bg/75 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-2">
-        <button
-          onClick={onUse}
-          className="w-full bg-flame text-on-flame border-2 border-ink px-2 py-1.5 text-[11px] uppercase tracking-widest"
-          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-        >
-          set as my pfp
-        </button>
-        <button
-          onClick={onShare}
-          className="w-full bg-ink text-bg border-2 border-ink px-2 py-1.5 text-[11px] uppercase tracking-widest"
-          style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-        >
-          share on x
-        </button>
-        <div className="grid grid-cols-2 gap-1.5 w-full">
-          <button
-            onClick={onDownload}
-            className="bg-surface text-ink border-2 border-ink px-2 py-1.5 text-[11px] uppercase tracking-widest"
-            style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-          >
-            download
-          </button>
-          <button
-            onClick={onSave}
-            className="bg-surface text-ink border-2 border-ink px-2 py-1.5 text-[11px] uppercase tracking-widest"
-            style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-          >
-            save
-          </button>
-        </div>
+      <div className="relative flex-1 min-h-0" style={{ minHeight: 0 }}>
+        <img
+          src={result.url}
+          alt="generated spaceshiba pfp"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      </div>
+      <div className="shrink-0 border-t-2 border-ink bg-bg grid grid-cols-4 divide-x-2 divide-ink">
+        <TileAction label="Set as PFP" onClick={onUse} highlight>
+          <UserIcon />
+        </TileAction>
+        <TileAction label="Share on X" onClick={onShare}>
+          <XGlyph />
+        </TileAction>
+        <TileAction label="Download" onClick={onDownload}>
+          <DownloadIcon />
+        </TileAction>
+        <TileAction label="Save" onClick={onSave}>
+          <PlusIcon />
+        </TileAction>
       </div>
     </motion.div>
+  );
+}
+
+function TileAction({
+  label,
+  onClick,
+  highlight,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  highlight?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={`flex items-center justify-center py-1.5 text-ink hover:text-on-flame hover:bg-flame transition-colors ${
+        highlight ? "text-flame" : ""
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 22c0-4.42 3.58-8 8-8s8 3.58 8 8" />
+    </svg>
+  );
+}
+
+function XGlyph() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M18.244 2H21.5l-7.53 8.61L22.5 22h-6.844l-5.36-6.99L4.1 22H.84l8.06-9.21L.5 2h7.02l4.85 6.41L18.244 2Zm-1.2 18h1.87L7.03 4H5.06l11.984 16Z" />
+    </svg>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="square" aria-hidden>
+      <path d="M12 3v13" />
+      <path d="M6 12l6 6 6-6" />
+      <path d="M4 21h16" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="square" aria-hidden>
+      <path d="M12 4v16" />
+      <path d="M4 12h16" />
+    </svg>
   );
 }
 
@@ -564,9 +610,9 @@ function GalleryStrip({
 }) {
   if (gallery.length === 0) return null;
   return (
-    <div className="bg-surface border-2 border-ink p-3">
+    <div className="shrink-0 bg-surface border-2 border-ink p-2 sm:p-3">
       <div
-        className="text-ink/55 text-[10px] uppercase tracking-[0.22em] mb-2"
+        className="text-ink/55 text-[10px] uppercase tracking-[0.22em] mb-1.5"
         style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       >
         my spaceshibas · {gallery.length}
@@ -575,7 +621,7 @@ function GalleryStrip({
         {gallery.map((p) => (
           <div
             key={p.id}
-            className={`relative shrink-0 w-20 h-20 sm:w-24 sm:h-24 border-2 overflow-hidden ${
+            className={`relative shrink-0 w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20 border-2 overflow-hidden ${
               selectedId === p.id ? "border-flame" : "border-ink/60"
             }`}
           >
