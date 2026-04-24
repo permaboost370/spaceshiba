@@ -9,35 +9,40 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // AI models are terrible at clean text, so we composite the
-// $SPACESHIBA mark server-side via sharp + SVG. The font is
-// bundled with the deploy and embedded in the SVG as a data URL
-// so rendering is independent of whatever fonts Vercel's Lambda
-// runtime happens to have installed (generic 'monospace' fell
-// back to tofu without this).
+// $SPACESHIBA mark server-side. Using sharp's native text input
+// (Pango-backed) with an explicit `fontfile` is more reliable
+// than @font-face-in-SVG on Vercel's Lambda runtime, which renders
+// SVG @font-face data URLs as tofu.
 const WATERMARK = "$SPACESHIBA";
-const FONT_BASE64 = (() => {
-  try {
-    const p = path.join(process.cwd(), "fonts", "SpaceMono-Bold.ttf");
-    return readFileSync(p).toString("base64");
-  } catch {
-    return "";
-  }
-})();
+const FONTFILE = path.join(process.cwd(), "fonts", "SpaceMono-Bold.ttf");
+// Touching the font at module load keeps any missing-file failure
+// obvious instead of surfacing mid-request.
+try {
+  readFileSync(FONTFILE);
+} catch (e) {
+  console.warn("watermark font missing at", FONTFILE, e);
+}
 
-function watermarkSvg(w: number, h: number): Buffer {
-  const fontSize = Math.max(18, Math.round(h * 0.028));
-  const pad = Math.round(h * 0.028);
-  const fontFace = FONT_BASE64
-    ? `@font-face{font-family:'SpaceMono';src:url('data:font/ttf;base64,${FONT_BASE64}') format('truetype');}`
-    : "";
-  // paint-order + stroke gives the text a cream outline so it stays
-  // legible even if the model slips in a dark patch behind it.
-  return Buffer.from(
-    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">` +
-      `<defs><style>${fontFace}.m{font-family:'SpaceMono',ui-monospace,monospace;font-weight:700;letter-spacing:2px;paint-order:stroke fill;stroke:#f4ecd8;stroke-width:4;fill:#0a0a0a}</style></defs>` +
-      `<text class="m" x="${w - pad}" y="${h - pad}" font-size="${fontSize}" text-anchor="end">${WATERMARK}</text>` +
-      `</svg>`,
-  );
+async function renderWatermark(
+  fontPx: number,
+): Promise<{ buf: Buffer; w: number; h: number }> {
+  // Pango wants points; 96dpi → 1pt = 1.333px.
+  const fontPt = Math.max(12, Math.round(fontPx * 72 / 96));
+  // Pango markup: dark text with subtle letter-spacing (1024/em).
+  const markup = `<span foreground="#0a0a0a" letter_spacing="2000">${WATERMARK}</span>`;
+  const buf = await sharp({
+    text: {
+      text: markup,
+      fontfile: FONTFILE,
+      font: `Space Mono Bold ${fontPt}`,
+      rgba: true,
+      dpi: 96,
+    },
+  })
+    .png()
+    .toBuffer();
+  const meta = await sharp(buf).metadata();
+  return { buf, w: meta.width ?? 0, h: meta.height ?? 0 };
 }
 
 // Cheap in-memory rate limit — 6 generations per IP per minute. Resets
@@ -169,8 +174,17 @@ export async function POST(req: Request) {
           const meta = await sharp(imgBuf).metadata();
           const w = meta.width ?? 1024;
           const h = meta.height ?? 1024;
+          const fontPx = Math.max(24, Math.round(h * 0.028));
+          const pad = Math.round(h * 0.028);
+          const text = await renderWatermark(fontPx);
           const stamped = await sharp(imgBuf)
-            .composite([{ input: watermarkSvg(w, h), top: 0, left: 0 }])
+            .composite([
+              {
+                input: text.buf,
+                top: Math.max(0, h - text.h - pad),
+                left: Math.max(0, w - text.w - pad),
+              },
+            ])
             .jpeg({ quality: 92 })
             .toBuffer();
           const file = new File(
