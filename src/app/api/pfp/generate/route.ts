@@ -142,7 +142,28 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ images, prompt });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown fal.ai error";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    // fal's ApiError exposes `body` and `status` with the server's
+    // explanation (auth, quota, content-policy, model-not-found, etc).
+    // Without this, every failure surfaces as the generic "Forbidden"
+    // string and we can't tell what's actually wrong.
+    const errAny = e as {
+      message?: string;
+      status?: number;
+      body?: unknown;
+    };
+    const body =
+      typeof errAny.body === "string"
+        ? errAny.body
+        : errAny.body
+          ? JSON.stringify(errAny.body)
+          : undefined;
+    const msg =
+      [errAny.message, body].filter(Boolean).join(" — ") ||
+      "Unknown fal.ai error";
+    console.error("fal.ai error", { status: errAny.status, body: errAny.body });
+    return NextResponse.json(
+      { error: msg, status: errAny.status ?? null },
+      { status: 502 },
+    );
   }
 }
