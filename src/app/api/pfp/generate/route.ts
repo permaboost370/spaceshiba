@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
+import sharp from "sharp";
 import { composePrompt, TRAIT_CATEGORIES } from "@/lib/pfpTraits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+// AI models are terrible at rendering clean text, so we don't ask
+// the model to draw the $SPACESHIBA mark — we composite it onto the
+// finished image server-side via sharp + SVG. Crisp vector text, no
+// garbled letters, and reliable placement.
+const WATERMARK = "$SPACESHIBA";
+function watermarkSvg(w: number, h: number): Buffer {
+  const fontSize = Math.max(18, Math.round(h * 0.028));
+  const pad = Math.round(h * 0.028);
+  // paint-order + stroke gives the text a cream outline so it stays
+  // legible even if the model slips in a dark patch behind it.
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">` +
+      `<style>.m{font-family:'Courier New',ui-monospace,Menlo,monospace;font-weight:700;letter-spacing:2px;paint-order:stroke fill;stroke:#f4ecd8;stroke-width:4;fill:#0a0a0a}</style>` +
+      `<text class="m" x="${w - pad}" y="${h - pad}" font-size="${fontSize}" text-anchor="end">${WATERMARK}</text>` +
+      `</svg>`,
+  );
+}
 
 // Cheap in-memory rate limit — 6 generations per IP per minute. Resets
 // on cold start, which is fine for MVP; swap to Upstash/Redis if abuse
@@ -97,17 +116,17 @@ export async function POST(req: Request) {
 
   fal.config({ credentials: process.env.FAL_KEY });
 
-  // Using Bytedance Seedream v4 Edit: takes an array of reference
-  // images plus a prompt, strong character preservation, higher
-  // fidelity output than Nano Banana for PFP-style edits.
+  // Using Bytedance Seedream v4.5 Edit: same API shape as v4, improved
+  // lighting/texture/character preservation. Strong reference-driven
+  // edits for PFP-style portraits.
   const seeds = Array.from({ length: numImages }, () =>
     Math.floor(Math.random() * 2 ** 31),
   );
 
   try {
     const results = await Promise.all(
-      seeds.map((seed) =>
-        fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
+      seeds.map(async (seed) => {
+        const r = await fal.subscribe("fal-ai/bytedance/seedream/v4.5/edit", {
           input: {
             prompt,
             image_urls: [imageUrl],
@@ -116,18 +135,45 @@ export async function POST(req: Request) {
             seed,
           },
           logs: false,
-        }),
-      ),
+        });
+
+        const data = r.data as FalImageResult | undefined;
+        const originalUrl = data?.images?.[0]?.url;
+        if (!originalUrl) return null;
+
+        // Fetch the generated image, composite $SPACESHIBA on top
+        // via sharp (crisp vector text — no AI text-drawing artefacts),
+        // and re-upload to fal's storage so the rest of the pipeline
+        // (gallery, downloads) keeps working URL-based. If anything in
+        // the watermark step fails, fall back to the raw URL so a
+        // single bad post-process doesn't kill the whole request.
+        try {
+          const imgRes = await fetch(originalUrl);
+          const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+          const meta = await sharp(imgBuf).metadata();
+          const w = meta.width ?? 1024;
+          const h = meta.height ?? 1024;
+          const stamped = await sharp(imgBuf)
+            .composite([{ input: watermarkSvg(w, h), top: 0, left: 0 }])
+            .jpeg({ quality: 92 })
+            .toBuffer();
+          const file = new File(
+            [new Uint8Array(stamped)],
+            `spaceshiba-${seed}.jpg`,
+            { type: "image/jpeg" },
+          );
+          const stampedUrl = await fal.storage.upload(file);
+          return { url: stampedUrl, seed: data?.seed ?? seed };
+        } catch (e) {
+          console.warn("watermark step failed, returning raw url", e);
+          return { url: originalUrl, seed: data?.seed ?? seed };
+        }
+      }),
     );
 
-    const images = results
-      .map((r, i) => {
-        const data = r.data as FalImageResult | undefined;
-        const url = data?.images?.[0]?.url;
-        if (!url) return null;
-        return { url, seed: data?.seed ?? seeds[i] };
-      })
-      .filter((x): x is { url: string; seed: number } => x !== null);
+    const images = results.filter(
+      (x): x is { url: string; seed: number } => x !== null,
+    );
 
     if (images.length === 0) {
       return NextResponse.json(
