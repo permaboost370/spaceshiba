@@ -72,7 +72,7 @@ export type TraitSelection = Record<string, string>; // { background: "deep-spac
 // volumetric lighting, and glossy digital-painting shading, which
 // otherwise makes outputs feel 3D compared to the naive 2D reference.
 const BASELINE =
-  "recreate the EXACT shiba inu astronaut character from the reference image: same face markings and mask pattern, same eye shape and colour, same muzzle, same head and helmet shape, same spacesuit silhouette and body proportions; centered head-and-shoulders profile-picture composition";
+  "recreate the EXACT shiba inu astronaut character from the reference image: same face markings and mask pattern, same eye shape and colour, same muzzle, same head and helmet shape, same spacesuit silhouette and body proportions; full-body composition exactly like the reference — show the entire character from the tips of the ears down to the paws, including the tail, in the same front-facing seated pose as the reference, centered in the frame with comfortable margins around the whole body";
 const STYLE_LOCK =
   "draw in the reference's flat 2D children's-book hand-drawn style: simple clean outlines, flat coloured-pencil fills on textured cream paper, minimal light shading, slight visible pencil texture, naive amateur feel. The background MUST be the same plain cream/off-white paper as the reference image — no scene, no environment, no stars, no sky, no gradient, no framing. DO NOT add 3D rendering, volumetric lighting, ambient occlusion, digital painting, glossy or metallic highlights, specular reflections, cinematic lighting, depth of field, photorealism, or detail beyond what the reference itself shows; keep it completely flat and hand-drawn exactly like the reference";
 
