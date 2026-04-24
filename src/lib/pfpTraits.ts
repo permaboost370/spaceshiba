@@ -13,6 +13,20 @@ export type TraitCategory = {
 
 export const TRAIT_CATEGORIES: TraitCategory[] = [
   {
+    id: "furColor",
+    label: "fur color",
+    options: [
+      { id: "default", label: "reference", prompt: "the shiba's white fur stays the same off-white colour as the reference" },
+      { id: "pink", label: "pink", prompt: "the white areas of the shiba's fur are recoloured soft pastel pink — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+      { id: "blue", label: "blue", prompt: "the white areas of the shiba's fur are recoloured pastel sky blue — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+      { id: "grey", label: "grey", prompt: "the white areas of the shiba's fur are recoloured soft light grey — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+      { id: "mint", label: "mint", prompt: "the white areas of the shiba's fur are recoloured pale mint green — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+      { id: "lavender", label: "lavender", prompt: "the white areas of the shiba's fur are recoloured pale lavender purple — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+      { id: "yellow", label: "yellow", prompt: "the white areas of the shiba's fur are recoloured soft pastel yellow — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+      { id: "black", label: "black", prompt: "the white areas of the shiba's fur are recoloured matte black — ONLY the parts that are white in the reference change; the orange face mask, eye mask, ears and orange markings stay exactly the same orange as the reference" },
+    ],
+  },
+  {
     id: "suitColor",
     label: "suit color",
     options: [
