@@ -15,7 +15,9 @@ const CSP = [
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "img-src 'self' data: blob:",
+  // fal.media hosts serve generated PFPs (Nano Banana output) shown in
+  // the /pfp generator and the /pfp/s share-landing page.
+  "img-src 'self' data: blob: https://fal.media https://*.fal.media",
   // https: covers Solana RPC endpoints + og images; wss:/ws: cover the
   // game server's websocket (prod + local dev).
   "connect-src 'self' https: wss: ws://localhost:* ws://127.0.0.1:*",

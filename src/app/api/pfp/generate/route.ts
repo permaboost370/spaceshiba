@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
-import { composePrompt, TRAIT_CATEGORIES, STYLE_PRESETS } from "@/lib/pfpTraits";
+import { composePrompt, TRAIT_CATEGORIES } from "@/lib/pfpTraits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -28,13 +28,12 @@ function rateLimit(ip: string): { ok: boolean; retryAfterS: number } {
 
 type Body = {
   traits?: Record<string, string>;
-  styleId?: string;
   prompt?: string;
   numImages?: number;
 };
 
-// Lock down what the client can send. Unknown trait ids get dropped;
-// unknown style ids fall back to the first preset.
+// Lock down what the client can send. Unknown trait ids get replaced
+// with the category's default.
 function sanitize(body: Body) {
   const traits: Record<string, string> = {};
   for (const cat of TRAIT_CATEGORIES) {
@@ -42,14 +41,12 @@ function sanitize(body: Body) {
     const match = cat.options.find((o) => o.id === incoming);
     traits[cat.id] = match ? match.id : cat.options[0].id;
   }
-  const styleMatch = STYLE_PRESETS.find((s) => s.id === body.styleId);
-  const styleId = styleMatch ? styleMatch.id : STYLE_PRESETS[0].id;
   const userPrompt = typeof body.prompt === "string" ? body.prompt.slice(0, 200) : "";
   const numImages = Math.max(
     1,
-    Math.min(4, Math.floor(Number(body.numImages) || 4)),
+    Math.min(4, Math.floor(Number(body.numImages) || 1)),
   );
-  return { traits, styleId, userPrompt, numImages };
+  return { traits, userPrompt, numImages };
 }
 
 // Builds an absolute URL for the reference image. fal.ai fetches the
@@ -94,8 +91,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { traits, styleId, userPrompt, numImages } = sanitize(body);
-  const prompt = composePrompt(traits, styleId, userPrompt);
+  const { traits, userPrompt, numImages } = sanitize(body);
+  const prompt = composePrompt(traits, userPrompt);
   const imageUrl = refImageUrl(req);
 
   fal.config({ credentials: process.env.FAL_KEY });

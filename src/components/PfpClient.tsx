@@ -1,12 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWallet } from "@solana/wallet-adapter-react";
 import {
   TRAIT_CATEGORIES,
-  STYLE_PRESETS,
-  composePrompt,
   defaultSelection,
   type TraitSelection,
 } from "@/lib/pfpTraits";
@@ -32,7 +30,6 @@ export function PfpClient() {
   const walletAddress = publicKey?.toBase58() ?? null;
 
   const [selection, setSelection] = useState<TraitSelection>(defaultSelection);
-  const [styleId, setStyleId] = useState<string>(STYLE_PRESETS[0].id);
   const [userPrompt, setUserPrompt] = useState<string>("");
   const [gen, setGen] = useState<GenState>({ kind: "idle" });
   const [gallery, setGallery] = useState<SavedPfp[]>([]);
@@ -43,11 +40,6 @@ export function PfpClient() {
     setGallery(loadGallery(walletAddress));
     setSelectedIdState(getSelectedPfp(walletAddress));
   }, [walletAddress]);
-
-  const composedPrompt = useMemo(
-    () => composePrompt(selection, styleId, userPrompt),
-    [selection, styleId, userPrompt],
-  );
 
   const setTrait = (cat: string, val: string) =>
     setSelection((s) => ({ ...s, [cat]: val }));
@@ -62,7 +54,6 @@ export function PfpClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           traits: selection,
-          styleId,
           prompt: userPrompt,
           numImages: total,
         }),
@@ -77,7 +68,7 @@ export function PfpClient() {
       const msg = e instanceof Error ? e.message : "Generation failed";
       setGen({ kind: "error", message: msg });
     }
-  }, [gen.kind, selection, styleId, userPrompt]);
+  }, [gen.kind, selection, userPrompt]);
 
   const saveAndUse = (result: GenResult) => {
     const id = `${Date.now()}-${result.seed}`;
@@ -85,7 +76,6 @@ export function PfpClient() {
       id,
       url: result.url,
       traits: selection,
-      styleId,
       prompt: userPrompt,
       seed: result.seed,
       createdAt: Date.now(),
@@ -102,7 +92,6 @@ export function PfpClient() {
       id,
       url: result.url,
       traits: selection,
-      styleId,
       prompt: userPrompt,
       seed: result.seed,
       createdAt: Date.now(),
@@ -223,7 +212,6 @@ export function PfpClient() {
                 id,
                 url: r.url,
                 traits: selection,
-                styleId,
                 prompt: userPrompt,
                 seed: r.seed,
                 createdAt: Date.now(),
@@ -255,15 +243,6 @@ export function PfpClient() {
             ))}
 
             <div className="border-t-2 border-ink/25 pt-2">
-              <TraitGroup
-                label="style"
-                options={STYLE_PRESETS.map((s) => ({ id: s.id, label: s.label }))}
-                value={styleId}
-                onChange={setStyleId}
-              />
-            </div>
-
-            <div>
               <label
                 className="block text-ink/55 text-[10px] uppercase tracking-[0.22em] mb-1"
                 style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}

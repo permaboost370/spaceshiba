@@ -10,7 +10,6 @@ export type SavedPfp = {
   id: string;
   url: string;
   traits: TraitSelection;
-  styleId: string;
   prompt: string;
   seed: number;
   createdAt: number;

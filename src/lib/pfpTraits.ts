@@ -74,40 +74,15 @@ export const TRAIT_CATEGORIES: TraitCategory[] = [
   },
 ];
 
-export type StylePreset = {
-  id: string;
-  label: string;
-  prompt: string;
-};
-
-export const STYLE_PRESETS: StylePreset[] = [
-  {
-    id: "handdrawn",
-    label: "hand-drawn",
-    prompt:
-      "hand-drawn ink illustration on cream paper, visible pencil strokes, brutalist zine aesthetic, matches the reference character's style",
-  },
-  {
-    id: "pixel",
-    label: "pixel",
-    prompt:
-      "32-bit pixel art portrait, clean pixels, limited palette, retro game sprite aesthetic",
-  },
-  {
-    id: "cosmic",
-    label: "cosmic",
-    prompt:
-      "high-contrast cosmic digital painting, vivid nebula colors, dramatic rim light",
-  },
-  {
-    id: "3d",
-    label: "3d render",
-    prompt:
-      "stylized 3d render, soft volumetric light, clean plastic-like materials, octane quality",
-  },
-];
-
 export type TraitSelection = Record<string, string>; // { background: "deep-space", ... }
+
+// Hidden baseline the UI never exposes. Locks the output to the
+// reference character's identity + rendering style so the only thing
+// that changes from one PFP to the next is the user-picked traits.
+const BASELINE =
+  "portrait of the exact shiba inu astronaut character shown in the reference image; preserve the character's face, fur markings, head shape, helmet/suit silhouette, and overall body proportions identically to the reference; centered head-and-shoulders composition suitable for a profile picture";
+const STYLE_LOCK =
+  "rendered in the same hand-drawn pencil-and-ink illustration style as the reference, on cream paper, with visible pencil strokes and hand-coloured tones; do not change the art style";
 
 export function defaultSelection(): TraitSelection {
   const sel: TraitSelection = {};
@@ -117,12 +92,12 @@ export function defaultSelection(): TraitSelection {
   return sel;
 }
 
-// Joins the user's selected traits + style + freeform prompt into a
-// single prompt string to send to the image model. Kontext is at its
-// best with comma-separated concrete descriptors, not long prose.
+// Joins the user's selected traits + optional freeform prompt into a
+// single prompt string. The BASELINE + STYLE_LOCK are always prepended
+// so the model is told "same character, same style, only these
+// traits change."
 export function composePrompt(
   selection: TraitSelection,
-  styleId: string,
   userPrompt: string,
 ): string {
   const traitParts: string[] = [];
@@ -130,13 +105,9 @@ export function composePrompt(
     const chosen = cat.options.find((o) => o.id === selection[cat.id]);
     if (chosen) traitParts.push(chosen.prompt);
   }
-  const style =
-    STYLE_PRESETS.find((s) => s.id === styleId) ?? STYLE_PRESETS[0];
   const extras = userPrompt.trim().slice(0, 200);
 
-  const core =
-    "portrait of the reference shiba inu astronaut character, centered profile-picture composition, head and shoulders visible";
-  const parts = [core, ...traitParts, style.prompt];
+  const parts = [BASELINE, STYLE_LOCK, ...traitParts];
   if (extras) parts.push(extras);
   return parts.join(", ");
 }
