@@ -56,16 +56,13 @@ function sanitize(body: Body) {
 }
 
 // Builds an absolute URL for the reference image. fal.ai fetches the
-// image by URL, so it has to be publicly reachable. ref2.jpg is the
-// full composition reference — shiba character + SPACESHIBA wordmark
-// + ASTROID wordmark + both astroid star ornaments — so the model
-// has everything it needs to preserve the layout.
+// image by URL, so it has to be publicly reachable.
 function refImageUrl(req: Request): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL;
-  if (explicit) return `${explicit.replace(/\/$/, "")}/ref2.jpg`;
+  if (explicit) return `${explicit.replace(/\/$/, "")}/ref.jpg`;
   const host = req.headers.get("host");
   const proto = req.headers.get("x-forwarded-proto") || "https";
-  return `${proto}://${host}/ref2.jpg`;
+  return `${proto}://${host}/ref.jpg`;
 }
 
 type FalImageResult = {
