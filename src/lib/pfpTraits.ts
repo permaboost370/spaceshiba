@@ -77,12 +77,16 @@ export const TRAIT_CATEGORIES: TraitCategory[] = [
 export type TraitSelection = Record<string, string>; // { background: "deep-space", ... }
 
 // Hidden baseline the UI never exposes. Locks the output to the
-// reference character's identity + rendering style so the only thing
-// that changes from one PFP to the next is the user-picked traits.
+// reference character's identity + the reference's flat hand-drawn
+// aesthetic so the only thing that changes per-generation is the
+// user-picked traits. The "do NOT" clause is effectively a negative
+// prompt — it kills Seedream's default bias toward adding depth,
+// volumetric lighting, and glossy digital-painting shading, which
+// otherwise makes outputs feel 3D compared to the naive 2D reference.
 const BASELINE =
-  "portrait of the exact shiba inu astronaut character shown in the reference image; preserve the character's face, fur markings, head shape, helmet/suit silhouette, and overall body proportions identically to the reference; centered head-and-shoulders composition suitable for a profile picture";
+  "recreate the EXACT shiba inu astronaut character from the reference image: same face markings and mask pattern, same eye shape and colour, same muzzle, same head and helmet shape, same spacesuit silhouette and body proportions; centered head-and-shoulders profile-picture composition";
 const STYLE_LOCK =
-  "rendered in the same hand-drawn pencil-and-ink illustration style as the reference, on cream paper, with visible pencil strokes and hand-coloured tones; do not change the art style";
+  "draw in the reference's flat 2D children's-book hand-drawn style: simple clean outlines, flat coloured-pencil fills on textured cream paper, minimal light shading, slight visible pencil texture, naive amateur feel; DO NOT add 3D rendering, volumetric lighting, ambient occlusion, digital painting, glossy or metallic highlights, specular reflections, cinematic lighting, depth of field, photorealism, or detail beyond what the reference itself shows; keep it completely flat and hand-drawn exactly like the reference";
 
 export function defaultSelection(): TraitSelection {
   const sel: TraitSelection = {};
