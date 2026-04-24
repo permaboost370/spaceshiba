@@ -8,6 +8,12 @@ import { composePrompt, TRAIT_CATEGORIES } from "@/lib/pfpTraits";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+// Single generic error shown to users for any server-side failure
+// (fal billing, model error, content policy, timeouts, etc). Real
+// cause is always logged via console.error for us to inspect in
+// Vercel logs, but the user only ever sees this string.
+const GENERIC_ERROR = "Something went wrong. Please try again later.";
+
 // AI models are terrible at clean text, so we composite the
 // $SPACESHIBA mark server-side. Using sharp's native text input
 // (Pango-backed) with an explicit `fontfile` is more reliable
@@ -106,10 +112,8 @@ type FalImageResult = {
 
 export async function POST(req: Request) {
   if (!process.env.FAL_KEY) {
-    return NextResponse.json(
-      { error: "FAL_KEY is not configured" },
-      { status: 500 },
-    );
+    console.error("FAL_KEY missing from environment");
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 500 });
   }
 
   const ip =
@@ -206,35 +210,31 @@ export async function POST(req: Request) {
     );
 
     if (images.length === 0) {
+      console.error("model returned no images", { prompt });
       return NextResponse.json(
-        { error: "Model returned no images" },
+        { error: GENERIC_ERROR },
         { status: 502 },
       );
     }
 
     return NextResponse.json({ images, prompt });
   } catch (e) {
-    // fal's ApiError exposes `body` and `status` with the server's
-    // explanation (auth, quota, content-policy, model-not-found, etc).
-    // Without this, every failure surfaces as the generic "Forbidden"
-    // string and we can't tell what's actually wrong.
+    // Log full fal error detail server-side (auth, quota, content
+    // policy, etc) but never leak it to the user — the UI should just
+    // say "try again later" instead of exposing billing links or the
+    // fact that we even use fal.ai.
     const errAny = e as {
       message?: string;
       status?: number;
       body?: unknown;
     };
-    const body =
-      typeof errAny.body === "string"
-        ? errAny.body
-        : errAny.body
-          ? JSON.stringify(errAny.body)
-          : undefined;
-    const msg =
-      [errAny.message, body].filter(Boolean).join(" — ") ||
-      "Unknown fal.ai error";
-    console.error("fal.ai error", { status: errAny.status, body: errAny.body });
+    console.error("fal.ai error", {
+      status: errAny.status,
+      message: errAny.message,
+      body: errAny.body,
+    });
     return NextResponse.json(
-      { error: msg, status: errAny.status ?? null },
+      { error: GENERIC_ERROR },
       { status: 502 },
     );
   }
