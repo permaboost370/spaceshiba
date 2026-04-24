@@ -440,19 +440,34 @@ function LaunchBanner({ total }: { total: number }) {
   );
 }
 
-function LoadingTile({
-  index,
-  single,
-}: {
-  index: number;
-  single?: boolean;
-}) {
+// Parametric astroid: x = r·cos³(t), y = -r·sin³(t). 4-cusp curve —
+// the same path used in the game's crash-explosion animation so the
+// PFP generator and the game share a visual language.
+const ASTROID_STEPS = 48;
+const ASTROID_X: number[] = [];
+const ASTROID_Y: number[] = [];
+for (let i = 0; i <= ASTROID_STEPS; i++) {
+  const s = (i / ASTROID_STEPS) * Math.PI * 2;
+  const c = Math.cos(s);
+  const sn = Math.sin(s);
+  ASTROID_X.push(c * c * c); // preserves sign via odd power
+  ASTROID_Y.push(-sn * sn * sn);
+}
+
+function LoadingTile({ index }: { index: number; single?: boolean }) {
+  // Astroid curve path string for the faint trace behind the shiba.
+  const tracePath = `M ${ASTROID_X.map((x, i) => `${x.toFixed(4)} ${ASTROID_Y[i].toFixed(4)}`).join(" L ")} Z`;
+  // Shiba orbits this radius inside the [-1, 1] viewBox, leaving
+  // headroom for the sprite width.
+  const R = 0.62;
+  const shibaHeight = 0.55;
+  const shibaWidth = shibaHeight * (209 / 408);
   return (
     <motion.div
-      initial={{ opacity: 0.4 }}
-      animate={{ opacity: [0.4, 0.9, 0.4] }}
+      initial={{ opacity: 0.6 }}
+      animate={{ opacity: [0.6, 1, 0.6] }}
       transition={{
-        duration: 1.4,
+        duration: 2.4,
         repeat: Infinity,
         delay: index * 0.12,
         ease: "easeInOut",
@@ -463,14 +478,53 @@ function LoadingTile({
         className="absolute inset-0"
         style={{
           background:
-            "repeating-linear-gradient(135deg, rgba(255,74,0,0.12) 0 12px, transparent 12px 24px)",
+            "repeating-linear-gradient(135deg, rgba(255,74,0,0.10) 0 12px, transparent 12px 24px)",
         }}
       />
+
+      {/* Both the astroid trace and the orbiting shiba share the
+          SVG viewBox so positioning scales with the tile size. */}
+      <svg
+        viewBox="-1.15 -1.15 2.3 2.3"
+        className="absolute inset-0 w-full h-full"
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden
+      >
+        <path
+          d={tracePath}
+          fill="none"
+          stroke="rgba(255,74,0,0.32)"
+          strokeWidth={0.014}
+          strokeLinecap="round"
+        />
+        <motion.g
+          animate={{
+            x: ASTROID_X.map((v) => v * R),
+            y: ASTROID_Y.map((v) => v * R),
+          }}
+          transition={{
+            duration: 3.6,
+            repeat: Infinity,
+            ease: "linear",
+            delay: index * 0.25,
+          }}
+        >
+          <image
+            href="/shiba.png"
+            width={shibaWidth}
+            height={shibaHeight}
+            x={-shibaWidth / 2}
+            y={-shibaHeight * 0.88}
+            preserveAspectRatio="xMidYMid meet"
+          />
+        </motion.g>
+      </svg>
+
       <div
-        className="absolute inset-0 flex items-center justify-center text-flame text-xs uppercase tracking-[0.22em]"
+        className="absolute inset-x-0 bottom-2 text-center text-flame text-[10px] uppercase tracking-[0.28em]"
         style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       >
-        {single ? "orbit" : `orbit ${index + 1}`}
+        // in orbit
       </div>
     </motion.div>
   );
