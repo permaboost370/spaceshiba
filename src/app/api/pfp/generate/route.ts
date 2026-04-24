@@ -1,24 +1,40 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
 import sharp from "sharp";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { composePrompt, TRAIT_CATEGORIES } from "@/lib/pfpTraits";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// AI models are terrible at rendering clean text, so we don't ask
-// the model to draw the $SPACESHIBA mark — we composite it onto the
-// finished image server-side via sharp + SVG. Crisp vector text, no
-// garbled letters, and reliable placement.
+// AI models are terrible at clean text, so we composite the
+// $SPACESHIBA mark server-side via sharp + SVG. The font is
+// bundled with the deploy and embedded in the SVG as a data URL
+// so rendering is independent of whatever fonts Vercel's Lambda
+// runtime happens to have installed (generic 'monospace' fell
+// back to tofu without this).
 const WATERMARK = "$SPACESHIBA";
+const FONT_BASE64 = (() => {
+  try {
+    const p = path.join(process.cwd(), "fonts", "SpaceMono-Bold.ttf");
+    return readFileSync(p).toString("base64");
+  } catch {
+    return "";
+  }
+})();
+
 function watermarkSvg(w: number, h: number): Buffer {
   const fontSize = Math.max(18, Math.round(h * 0.028));
   const pad = Math.round(h * 0.028);
+  const fontFace = FONT_BASE64
+    ? `@font-face{font-family:'SpaceMono';src:url('data:font/ttf;base64,${FONT_BASE64}') format('truetype');}`
+    : "";
   // paint-order + stroke gives the text a cream outline so it stays
   // legible even if the model slips in a dark patch behind it.
   return Buffer.from(
     `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">` +
-      `<style>.m{font-family:'Courier New',ui-monospace,Menlo,monospace;font-weight:700;letter-spacing:2px;paint-order:stroke fill;stroke:#f4ecd8;stroke-width:4;fill:#0a0a0a}</style>` +
+      `<defs><style>${fontFace}.m{font-family:'SpaceMono',ui-monospace,monospace;font-weight:700;letter-spacing:2px;paint-order:stroke fill;stroke:#f4ecd8;stroke-width:4;fill:#0a0a0a}</style></defs>` +
       `<text class="m" x="${w - pad}" y="${h - pad}" font-size="${fontSize}" text-anchor="end">${WATERMARK}</text>` +
       `</svg>`,
   );

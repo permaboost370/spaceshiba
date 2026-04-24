@@ -41,6 +41,13 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // The PFP generate route reads fonts/SpaceMono-Bold.ttf at
+  // runtime to composite the $SPACESHIBA watermark. Without this
+  // tracing hint Vercel doesn't include the TTF in the serverless
+  // bundle and the readFileSync fails.
+  outputFileTracingIncludes: {
+    "/api/pfp/generate": ["./fonts/**/*"],
+  },
   async headers() {
     return [
       {
