@@ -97,22 +97,23 @@ export async function POST(req: Request) {
 
   fal.config({ credentials: process.env.FAL_KEY });
 
-  // Using Gemini 2.5 Flash Image ("Nano Banana") edit endpoint: takes
-  // an array of reference images plus a prompt, very fast and cheap,
-  // with strong character preservation for PFP-style edits.
+  // Using Bytedance Seedream v4 Edit: takes an array of reference
+  // images plus a prompt, strong character preservation, higher
+  // fidelity output than Nano Banana for PFP-style edits.
   const seeds = Array.from({ length: numImages }, () =>
     Math.floor(Math.random() * 2 ** 31),
   );
 
   try {
     const results = await Promise.all(
-      seeds.map(() =>
-        fal.subscribe("fal-ai/nano-banana/edit", {
+      seeds.map((seed) =>
+        fal.subscribe("fal-ai/bytedance/seedream/v4/edit", {
           input: {
             prompt,
             image_urls: [imageUrl],
             num_images: 1,
-            output_format: "jpeg",
+            image_size: { width: 1024, height: 1024 },
+            seed,
           },
           logs: false,
         }),
