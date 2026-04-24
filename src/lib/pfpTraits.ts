@@ -13,18 +13,6 @@ export type TraitCategory = {
 
 export const TRAIT_CATEGORIES: TraitCategory[] = [
   {
-    id: "background",
-    label: "background",
-    options: [
-      { id: "deep-space", label: "deep space", prompt: "deep space with distant stars and a faint nebula" },
-      { id: "neon-city", label: "neon city", prompt: "neon cyberpunk cityscape at night, bright magenta and cyan lights" },
-      { id: "sunset-orbit", label: "sunset orbit", prompt: "low earth orbit at sunrise, warm orange and red atmospheric glow" },
-      { id: "void", label: "void", prompt: "pure black void with a single hard light source" },
-      { id: "meteor-shower", label: "meteor shower", prompt: "meteor shower streaking across a dark purple sky" },
-      { id: "moon-surface", label: "moon surface", prompt: "cratered lunar surface with earth rising in the background" },
-    ],
-  },
-  {
     id: "helmet",
     label: "helmet",
     options: [
@@ -86,7 +74,7 @@ export type TraitSelection = Record<string, string>; // { background: "deep-spac
 const BASELINE =
   "recreate the EXACT shiba inu astronaut character from the reference image: same face markings and mask pattern, same eye shape and colour, same muzzle, same head and helmet shape, same spacesuit silhouette and body proportions; centered head-and-shoulders profile-picture composition";
 const STYLE_LOCK =
-  "draw in the reference's flat 2D children's-book hand-drawn style: simple clean outlines, flat coloured-pencil fills on textured cream paper, minimal light shading, slight visible pencil texture, naive amateur feel; DO NOT add 3D rendering, volumetric lighting, ambient occlusion, digital painting, glossy or metallic highlights, specular reflections, cinematic lighting, depth of field, photorealism, or detail beyond what the reference itself shows; keep it completely flat and hand-drawn exactly like the reference";
+  "draw in the reference's flat 2D children's-book hand-drawn style: simple clean outlines, flat coloured-pencil fills on textured cream paper, minimal light shading, slight visible pencil texture, naive amateur feel. The background MUST be the same plain cream/off-white paper as the reference image — no scene, no environment, no stars, no sky, no gradient, no framing. DO NOT add 3D rendering, volumetric lighting, ambient occlusion, digital painting, glossy or metallic highlights, specular reflections, cinematic lighting, depth of field, photorealism, or detail beyond what the reference itself shows; keep it completely flat and hand-drawn exactly like the reference";
 
 export function defaultSelection(): TraitSelection {
   const sel: TraitSelection = {};

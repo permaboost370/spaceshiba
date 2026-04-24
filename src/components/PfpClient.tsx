@@ -113,29 +113,6 @@ export function PfpClient() {
     setSelectedIdState(id);
   };
 
-  const shareOnX = (pfp: SavedPfp) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    // fal.ai CDN URL goes in as ?img so our /pfp/s page can emit OG
-    // meta pointing at the generated image. Cache-bust with ?v so X
-    // re-unfurls every new share instead of reusing a cached preview.
-    const shareUrl = new URL(`${origin}/pfp/s`);
-    shareUrl.searchParams.set("img", pfp.url);
-    shareUrl.searchParams.set("v", pfp.seed.toString(36));
-    const text =
-      `Just generated my $SPACESHIBA PFP 🐕‍🚀\n` +
-      `All fees go to charity.\n`;
-    const params = new URLSearchParams({
-      text,
-      url: shareUrl.toString(),
-      hashtags: "ASTROID,CANCER,RESEARCH",
-    });
-    window.open(
-      `https://twitter.com/intent/tweet?${params.toString()}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
-  };
-
   const downloadImage = async (url: string, id: string) => {
     try {
       const res = await fetch(url);
@@ -205,20 +182,6 @@ export function PfpClient() {
             onUse={saveAndUse}
             onSave={justSave}
             onRegenerate={generate}
-            onShare={(r) => {
-              // turn the transient result into a saved pfp so the share URL resolves
-              const id = `${Date.now()}-${r.seed}`;
-              const pfp: SavedPfp = {
-                id,
-                url: r.url,
-                traits: selection,
-                prompt: userPrompt,
-                seed: r.seed,
-                createdAt: Date.now(),
-              };
-              setGallery(saveToGallery(walletAddress, pfp));
-              shareOnX(pfp);
-            }}
             onDownload={(r) => downloadImage(r.url, String(r.seed))}
           />
 
@@ -284,7 +247,6 @@ export function PfpClient() {
           <Lightbox
             pfp={lightbox}
             onClose={() => setLightbox(null)}
-            onShare={() => shareOnX(lightbox)}
             onDownload={() => downloadImage(lightbox.url, lightbox.id)}
             onSetAsPfp={() => {
               setAsPfp(lightbox.id);
@@ -349,14 +311,12 @@ function ResultsPanel({
   onUse,
   onSave,
   onRegenerate,
-  onShare,
   onDownload,
 }: {
   state: GenState;
   onUse: (r: GenResult) => void;
   onSave: (r: GenResult) => void;
   onRegenerate: () => void;
-  onShare: (r: GenResult) => void;
   onDownload: (r: GenResult) => void;
 }) {
   const frame =
@@ -421,7 +381,6 @@ function ResultsPanel({
             single={state.results.length === 1}
             onUse={() => onUse(r)}
             onSave={() => onSave(r)}
-            onShare={() => onShare(r)}
             onDownload={() => onDownload(r)}
           />
         ))}
@@ -502,14 +461,12 @@ function ResultTile({
   single,
   onUse,
   onSave,
-  onShare,
   onDownload,
 }: {
   result: GenResult;
   single?: boolean;
   onUse: () => void;
   onSave: () => void;
-  onShare: () => void;
   onDownload: () => void;
 }) {
   return (
@@ -530,12 +487,9 @@ function ResultTile({
           }`}
         />
       </div>
-      <div className="shrink-0 border-t-2 border-ink bg-bg grid grid-cols-4 divide-x-2 divide-ink">
+      <div className="shrink-0 border-t-2 border-ink bg-bg grid grid-cols-3 divide-x-2 divide-ink">
         <TileAction label="Set as PFP" onClick={onUse} highlight>
           <UserIcon />
-        </TileAction>
-        <TileAction label="Share on X" onClick={onShare}>
-          <XGlyph />
         </TileAction>
         <TileAction label="Download" onClick={onDownload}>
           <DownloadIcon />
@@ -578,14 +532,6 @@ function UserIcon() {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <circle cx="12" cy="8" r="4" />
       <path d="M4 22c0-4.42 3.58-8 8-8s8 3.58 8 8" />
-    </svg>
-  );
-}
-
-function XGlyph() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M18.244 2H21.5l-7.53 8.61L22.5 22h-6.844l-5.36-6.99L4.1 22H.84l8.06-9.21L.5 2h7.02l4.85 6.41L18.244 2Zm-1.2 18h1.87L7.03 4H5.06l11.984 16Z" />
     </svg>
   );
 }
@@ -662,7 +608,6 @@ function GalleryStrip({
 function Lightbox({
   pfp,
   onClose,
-  onShare,
   onDownload,
   onSetAsPfp,
   onRemove,
@@ -670,7 +615,6 @@ function Lightbox({
 }: {
   pfp: SavedPfp;
   onClose: () => void;
-  onShare: () => void;
   onDownload: () => void;
   onSetAsPfp: () => void;
   onRemove: () => void;
@@ -694,7 +638,7 @@ function Lightbox({
         <div className="border-2 border-ink overflow-hidden" style={{ aspectRatio: "1 / 1" }}>
           <img src={pfp.url} alt="" className="w-full h-full object-cover" />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={onSetAsPfp}
             disabled={isCurrentPfp}
@@ -702,13 +646,6 @@ function Lightbox({
             style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
           >
             {isCurrentPfp ? "current pfp" : "set as my pfp"}
-          </button>
-          <button
-            onClick={onShare}
-            className="bg-ink text-bg border-2 border-ink px-2 py-2 text-[11px] uppercase tracking-widest"
-            style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
-          >
-            share on x
           </button>
           <button
             onClick={onDownload}
