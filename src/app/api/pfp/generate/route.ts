@@ -62,7 +62,7 @@ function refImageUrl(req: Request): string {
   return `${proto}://${host}/ref.jpg`;
 }
 
-type KontextResult = {
+type FalImageResult = {
   images?: Array<{ url: string }>;
   seed?: number;
 };
@@ -100,24 +100,22 @@ export async function POST(req: Request) {
 
   fal.config({ credentials: process.env.FAL_KEY });
 
-  // Run the variants in parallel. Calling Kontext per-seed produces more
-  // meaningful variation than a single call with num_images, which tends
-  // to nudge only marginally off a shared latent.
+  // Using Gemini 2.5 Flash Image ("Nano Banana") edit endpoint: takes
+  // an array of reference images plus a prompt, very fast and cheap,
+  // with strong character preservation for PFP-style edits.
   const seeds = Array.from({ length: numImages }, () =>
     Math.floor(Math.random() * 2 ** 31),
   );
 
   try {
     const results = await Promise.all(
-      seeds.map((seed) =>
-        fal.subscribe("fal-ai/flux-pro/kontext", {
+      seeds.map(() =>
+        fal.subscribe("fal-ai/nano-banana/edit", {
           input: {
             prompt,
-            image_url: imageUrl,
-            seed,
-            aspect_ratio: "1:1",
+            image_urls: [imageUrl],
+            num_images: 1,
             output_format: "jpeg",
-            safety_tolerance: "2",
           },
           logs: false,
         }),
@@ -126,7 +124,7 @@ export async function POST(req: Request) {
 
     const images = results
       .map((r, i) => {
-        const data = r.data as KontextResult | undefined;
+        const data = r.data as FalImageResult | undefined;
         const url = data?.images?.[0]?.url;
         if (!url) return null;
         return { url, seed: data?.seed ?? seeds[i] };
