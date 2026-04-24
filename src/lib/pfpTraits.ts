@@ -20,7 +20,6 @@ export const TRAIT_CATEGORIES: TraitCategory[] = [
       { id: "cracked", label: "cracked", prompt: "battle-worn helmet with a cracked visor" },
       { id: "chrome", label: "chrome", prompt: "mirror-chrome helmet reflecting stars" },
       { id: "tinted", label: "tinted", prompt: "deep red tinted visor" },
-      { id: "none", label: "no helmet", prompt: "no helmet, fur flowing in zero gravity" },
       { id: "crown", label: "crown", prompt: "golden crown fused to the helmet" },
     ],
   },
