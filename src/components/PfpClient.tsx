@@ -117,22 +117,42 @@ export function PfpClient() {
     try {
       const res = await fetch(url);
       const blob = await res.blob();
-      // Pick a real extension so Mac's Quick Look / preview actually
-      // recognises the file. Falls back to whatever the URL suggests.
-      const urlExt = (url.match(/\.(png|jpe?g|webp|gif)(?:$|\?)/i)?.[1] ?? "").toLowerCase();
-      const typeExt =
-        blob.type === "image/png"
-          ? "png"
-          : blob.type === "image/webp"
-            ? "webp"
-            : blob.type === "image/gif"
-              ? "gif"
-              : blob.type === "image/jpeg"
-                ? "jpg"
-                : "";
-      const ext = typeExt || urlExt || "jpg";
+      // Sniff the real image format from the file's magic bytes.
+      // Necessary because fal.ai's CDN can return `.png` URLs with
+      // Content-Type: image/png even though the bytes are JPEG; saving
+      // as .png with mismatched bytes leaves macOS unable to generate
+      // Finder thumbnails or Quick Look previews.
+      const head = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+      let ext = "jpg";
+      let mime = "image/jpeg";
+      if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) {
+        ext = "png";
+        mime = "image/png";
+      } else if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+        ext = "jpg";
+        mime = "image/jpeg";
+      } else if (
+        head[0] === 0x52 &&
+        head[1] === 0x49 &&
+        head[2] === 0x46 &&
+        head[3] === 0x46 &&
+        head[8] === 0x57 &&
+        head[9] === 0x45 &&
+        head[10] === 0x42 &&
+        head[11] === 0x50
+      ) {
+        ext = "webp";
+        mime = "image/webp";
+      } else if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38) {
+        ext = "gif";
+        mime = "image/gif";
+      }
+      // Rebuild the blob with the correct MIME so the downloaded file's
+      // metadata is internally consistent (matters for some Finder
+      // plugins + any downstream upload).
+      const fixed = new Blob([blob], { type: mime });
       const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
+      a.href = URL.createObjectURL(fixed);
       a.download = `spaceshiba-${id}.${ext}`;
       document.body.appendChild(a);
       a.click();
