@@ -151,9 +151,23 @@ export function PfpClient() {
     try {
       const res = await fetch(url);
       const blob = await res.blob();
+      // Pick a real extension so Mac's Quick Look / preview actually
+      // recognises the file. Falls back to whatever the URL suggests.
+      const urlExt = (url.match(/\.(png|jpe?g|webp|gif)(?:$|\?)/i)?.[1] ?? "").toLowerCase();
+      const typeExt =
+        blob.type === "image/png"
+          ? "png"
+          : blob.type === "image/webp"
+            ? "webp"
+            : blob.type === "image/gif"
+              ? "gif"
+              : blob.type === "image/jpeg"
+                ? "jpg"
+                : "";
+      const ext = typeExt || urlExt || "jpg";
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `spaceshiba-${id}.png`;
+      a.download = `spaceshiba-${id}.${ext}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -382,7 +396,7 @@ function ResultsPanel({
     return (
       <div className={`${frame} p-3 flex flex-col gap-3`}>
         <LaunchBanner total={state.total} />
-        <div className={`grid ${cols} gap-2 flex-1 min-h-0 place-items-center`}>
+        <div className={`grid ${cols} gap-2 flex-1 min-h-0`}>
           {Array.from({ length: state.total }).map((_, i) => (
             <LoadingTile key={i} index={i} single={state.total === 1} />
           ))}
@@ -420,7 +434,7 @@ function ResultsPanel({
   const cols = state.results.length > 1 ? "grid-cols-2" : "grid-cols-1";
   return (
     <div className={`${frame} p-3`}>
-      <div className={`grid ${cols} gap-2 h-full min-h-0 place-items-center`}>
+      <div className={`grid ${cols} gap-2 h-full min-h-0`}>
         {state.results.map((r, i) => (
           <ResultTile
             key={`${r.seed}-${i}`}
@@ -485,10 +499,7 @@ function LoadingTile({
         delay: index * 0.12,
         ease: "easeInOut",
       }}
-      className={`relative border-2 border-ink/40 bg-bg overflow-hidden ${
-        single ? "h-full w-auto max-w-full" : "w-full"
-      }`}
-      style={{ aspectRatio: "1 / 1" }}
+      className="relative border-2 border-ink/40 bg-bg overflow-hidden w-full h-full"
     >
       <div
         className="absolute inset-0"
@@ -522,23 +533,22 @@ function ResultTile({
   onShare: () => void;
   onDownload: () => void;
 }) {
-  // When there's a single result, constrain to a square that fits the
-  // available column height so the tile doesn't stretch ugly-wide.
-  const sizing = single
-    ? "h-full w-auto max-w-full"
-    : "w-full h-full";
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      className={`relative border-2 border-ink bg-bg overflow-hidden flex flex-col min-h-0 ${sizing}`}
-      style={single ? { aspectRatio: "1 / 1" } : undefined}
+      className="relative border-2 border-ink bg-bg overflow-hidden flex flex-col w-full h-full min-h-0"
     >
-      <div className="relative flex-1 min-h-0">
+      <div className="relative flex-1 min-h-0 bg-bg">
         <img
           src={result.url}
           alt="generated spaceshiba pfp"
-          className="absolute inset-0 w-full h-full object-cover"
+          // single result → contain (square PFP shown uncropped in a
+          // possibly non-square cell); 2x2 grid → cover for a clean
+          // tile look without letterboxing.
+          className={`absolute inset-0 w-full h-full ${
+            single ? "object-contain" : "object-cover"
+          }`}
         />
       </div>
       <div className="shrink-0 border-t-2 border-ink bg-bg grid grid-cols-4 divide-x-2 divide-ink">
