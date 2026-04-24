@@ -54,7 +54,7 @@ export function PfpClient() {
 
   const generate = useCallback(async () => {
     if (gen.kind === "loading") return;
-    const total = 4;
+    const total = 1;
     setGen({ kind: "loading", progress: 0, total });
     try {
       const res = await fetch("/api/pfp/generate", {
@@ -278,7 +278,9 @@ export function PfpClient() {
             style={{ fontFamily: "var(--font-display)", fontWeight: 700 }}
           >
             {gen.kind === "loading"
-              ? `generating ${gen.progress}/${gen.total}…`
+              ? gen.total > 1
+                ? `generating ${gen.progress}/${gen.total}…`
+                : "generating…"
               : "generate"}
           </button>
         </aside>
@@ -376,12 +378,13 @@ function ResultsPanel({
   }
 
   if (state.kind === "loading") {
+    const cols = state.total > 1 ? "grid-cols-2" : "grid-cols-1";
     return (
       <div className={`${frame} p-3 flex flex-col gap-3`}>
         <LaunchBanner total={state.total} />
-        <div className="grid grid-cols-2 gap-2 flex-1 min-h-0">
+        <div className={`grid ${cols} gap-2 flex-1 min-h-0 place-items-center`}>
           {Array.from({ length: state.total }).map((_, i) => (
-            <LoadingTile key={i} index={i} />
+            <LoadingTile key={i} index={i} single={state.total === 1} />
           ))}
         </div>
       </div>
@@ -414,13 +417,15 @@ function ResultsPanel({
     );
   }
 
+  const cols = state.results.length > 1 ? "grid-cols-2" : "grid-cols-1";
   return (
     <div className={`${frame} p-3`}>
-      <div className="grid grid-cols-2 gap-2 h-full min-h-0">
+      <div className={`grid ${cols} gap-2 h-full min-h-0 place-items-center`}>
         {state.results.map((r, i) => (
           <ResultTile
             key={`${r.seed}-${i}`}
             result={r}
+            single={state.results.length === 1}
             onUse={() => onUse(r)}
             onSave={() => onSave(r)}
             onShare={() => onShare(r)}
@@ -458,12 +463,18 @@ function LaunchBanner({ total }: { total: number }) {
       style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
     >
       <span>// painting orbit…</span>
-      <span className="tabular-nums">{total} variants</span>
+      {total > 1 && <span className="tabular-nums">{total} variants</span>}
     </div>
   );
 }
 
-function LoadingTile({ index }: { index: number }) {
+function LoadingTile({
+  index,
+  single,
+}: {
+  index: number;
+  single?: boolean;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0.4 }}
@@ -474,7 +485,9 @@ function LoadingTile({ index }: { index: number }) {
         delay: index * 0.12,
         ease: "easeInOut",
       }}
-      className="relative border-2 border-ink/40 bg-bg overflow-hidden"
+      className={`relative border-2 border-ink/40 bg-bg overflow-hidden ${
+        single ? "h-full w-auto max-w-full" : "w-full"
+      }`}
       style={{ aspectRatio: "1 / 1" }}
     >
       <div
@@ -488,7 +501,7 @@ function LoadingTile({ index }: { index: number }) {
         className="absolute inset-0 flex items-center justify-center text-flame text-xs uppercase tracking-[0.22em]"
         style={{ fontFamily: "var(--font-hand)", fontWeight: 700 }}
       >
-        orbit {index + 1}
+        {single ? "orbit" : `orbit ${index + 1}`}
       </div>
     </motion.div>
   );
@@ -496,24 +509,32 @@ function LoadingTile({ index }: { index: number }) {
 
 function ResultTile({
   result,
+  single,
   onUse,
   onSave,
   onShare,
   onDownload,
 }: {
   result: GenResult;
+  single?: boolean;
   onUse: () => void;
   onSave: () => void;
   onShare: () => void;
   onDownload: () => void;
 }) {
+  // When there's a single result, constrain to a square that fits the
+  // available column height so the tile doesn't stretch ugly-wide.
+  const sizing = single
+    ? "h-full w-auto max-w-full"
+    : "w-full h-full";
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="relative border-2 border-ink bg-bg overflow-hidden flex flex-col min-h-0"
+      className={`relative border-2 border-ink bg-bg overflow-hidden flex flex-col min-h-0 ${sizing}`}
+      style={single ? { aspectRatio: "1 / 1" } : undefined}
     >
-      <div className="relative flex-1 min-h-0" style={{ minHeight: 0 }}>
+      <div className="relative flex-1 min-h-0">
         <img
           src={result.url}
           alt="generated spaceshiba pfp"
