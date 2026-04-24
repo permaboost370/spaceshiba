@@ -1,8 +1,5 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
-import sharp from "sharp";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { composePrompt, TRAIT_CATEGORIES } from "@/lib/pfpTraits";
 
 export const runtime = "nodejs";
@@ -13,43 +10,6 @@ export const maxDuration = 60;
 // cause is always logged via console.error for us to inspect in
 // Vercel logs, but the user only ever sees this string.
 const GENERIC_ERROR = "Something went wrong. Please try again later.";
-
-// AI models are terrible at clean text, so we composite the
-// $SPACESHIBA mark server-side. Using sharp's native text input
-// (Pango-backed) with an explicit `fontfile` is more reliable
-// than @font-face-in-SVG on Vercel's Lambda runtime, which renders
-// SVG @font-face data URLs as tofu.
-const WATERMARK = "$SPACESHIBA";
-const FONTFILE = path.join(process.cwd(), "fonts", "SpaceMono-Bold.ttf");
-// Touching the font at module load keeps any missing-file failure
-// obvious instead of surfacing mid-request.
-try {
-  readFileSync(FONTFILE);
-} catch (e) {
-  console.warn("watermark font missing at", FONTFILE, e);
-}
-
-async function renderWatermark(
-  fontPx: number,
-): Promise<{ buf: Buffer; w: number; h: number }> {
-  // Pango wants points; 96dpi → 1pt = 1.333px.
-  const fontPt = Math.max(12, Math.round(fontPx * 72 / 96));
-  // Pango markup: dark text with subtle letter-spacing (1024/em).
-  const markup = `<span foreground="#0a0a0a" letter_spacing="2000">${WATERMARK}</span>`;
-  const buf = await sharp({
-    text: {
-      text: markup,
-      fontfile: FONTFILE,
-      font: `Space Mono Bold ${fontPt}`,
-      rgba: true,
-      dpi: 96,
-    },
-  })
-    .png()
-    .toBuffer();
-  const meta = await sharp(buf).metadata();
-  return { buf, w: meta.width ?? 0, h: meta.height ?? 0 };
-}
 
 // Cheap in-memory rate limit — 6 generations per IP per minute. Resets
 // on cold start, which is fine for MVP; swap to Upstash/Redis if abuse
@@ -96,13 +56,16 @@ function sanitize(body: Body) {
 }
 
 // Builds an absolute URL for the reference image. fal.ai fetches the
-// image by URL, so it has to be publicly reachable.
+// image by URL, so it has to be publicly reachable. ref2.jpg is the
+// full composition reference — shiba character + SPACESHIBA wordmark
+// + ASTROID wordmark + both astroid star ornaments — so the model
+// has everything it needs to preserve the layout.
 function refImageUrl(req: Request): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL;
-  if (explicit) return `${explicit.replace(/\/$/, "")}/ref.jpg`;
+  if (explicit) return `${explicit.replace(/\/$/, "")}/ref2.jpg`;
   const host = req.headers.get("host");
   const proto = req.headers.get("x-forwarded-proto") || "https";
-  return `${proto}://${host}/ref.jpg`;
+  return `${proto}://${host}/ref2.jpg`;
 }
 
 type FalImageResult = {
@@ -163,45 +126,9 @@ export async function POST(req: Request) {
         });
 
         const data = r.data as FalImageResult | undefined;
-        const originalUrl = data?.images?.[0]?.url;
-        if (!originalUrl) return null;
-
-        // Fetch the generated image, composite $SPACESHIBA on top
-        // via sharp (crisp vector text — no AI text-drawing artefacts),
-        // and re-upload to fal's storage so the rest of the pipeline
-        // (gallery, downloads) keeps working URL-based. If anything in
-        // the watermark step fails, fall back to the raw URL so a
-        // single bad post-process doesn't kill the whole request.
-        try {
-          const imgRes = await fetch(originalUrl);
-          const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-          const meta = await sharp(imgBuf).metadata();
-          const w = meta.width ?? 1024;
-          const h = meta.height ?? 1024;
-          const fontPx = Math.max(24, Math.round(h * 0.028));
-          const pad = Math.round(h * 0.028);
-          const text = await renderWatermark(fontPx);
-          const stamped = await sharp(imgBuf)
-            .composite([
-              {
-                input: text.buf,
-                top: Math.max(0, h - text.h - pad),
-                left: Math.max(0, w - text.w - pad),
-              },
-            ])
-            .jpeg({ quality: 92 })
-            .toBuffer();
-          const file = new File(
-            [new Uint8Array(stamped)],
-            `spaceshiba-${seed}.jpg`,
-            { type: "image/jpeg" },
-          );
-          const stampedUrl = await fal.storage.upload(file);
-          return { url: stampedUrl, seed: data?.seed ?? seed };
-        } catch (e) {
-          console.warn("watermark step failed, returning raw url", e);
-          return { url: originalUrl, seed: data?.seed ?? seed };
-        }
+        const url = data?.images?.[0]?.url;
+        if (!url) return null;
+        return { url, seed: data?.seed ?? seed };
       }),
     );
 
